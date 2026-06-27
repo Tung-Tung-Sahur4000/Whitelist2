@@ -162,6 +162,7 @@ public abstract class MaintenancePlugin implements Maintenance {
         component = component.replace("%MODE%", mode == null ? "default" : mode);
         component = component.replace("%ONLINE%", String.valueOf(getOnlinePlayers()));
         component = component.replace("%MAX%", String.valueOf(getMaxPlayers()));
+        component = component.replace("%DISCORD%", settings.getDiscordInvite());
         return component;
     }
 

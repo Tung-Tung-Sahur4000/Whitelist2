@@ -43,6 +43,7 @@ public final class SettingsProxy extends Settings {
     private boolean fallbackToOfflineUUID;
     private boolean bedrockSupport;
     private String bedrockPrefix;
+    private String discordInvite;
     private boolean discordBotEnabled;
     private String discordBotToken;
     private String discordGuildId;
@@ -85,6 +86,8 @@ public final class SettingsProxy extends Settings {
         final ConfigSection bedrockSection = config.getSection("bedrock");
         bedrockSupport = bedrockSection.getBoolean("enabled", false);
         bedrockPrefix = bedrockSection.getString("prefix", ".");
+
+        discordInvite = config.getString("discord-invite", "");
 
         final ConfigSection discordSection = config.getSection("discord-bot");
         discordBotEnabled = discordSection.getBoolean("enabled", false);
@@ -330,6 +333,11 @@ public final class SettingsProxy extends Settings {
 
     public boolean isBedrockSupport() {
         return bedrockSupport;
+    }
+
+    @Override
+    public String getDiscordInvite() {
+        return discordInvite;
     }
 
     public String getBedrockPrefix() {

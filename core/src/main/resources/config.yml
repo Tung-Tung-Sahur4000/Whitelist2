@@ -120,6 +120,10 @@ kick-online-players: true
 # When fetched player does not exist then fallback to offline uuid. Only works on proxies like Velocity or BungeeCord
 fallback-to-offline-uuid: false
 
+# A Discord invite link for your server. Usable as the %DISCORD% placeholder in any message - most usefully in
+# the 'kickmessage' so non-whitelisted players know where to apply. Example: "discord.gg/yourserver"
+discord-invite: ""
+
 # If enabled and the server is restarted while running an endtimer, the timer will be continued after the restart.
 # If the timer ends while the server is offline, maintenance will be disabled as soon as the server starts again.
 continue-endtimer-after-restart:
@@ -209,4 +213,4 @@ discord-bot:
 update-checks: true
 
 # Used for autoupdating the config, do not change this value.
-config-version: 13
+config-version: 14

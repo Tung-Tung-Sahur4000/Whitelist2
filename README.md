@@ -56,6 +56,12 @@ gaining that role automatically adds them to the whitelist; losing it removes th
 holders are also reconciled on startup. Receiving role changes requires the **Server Members Intent** to be enabled
 for the bot in the Discord developer portal.
 
+### Manual whitelist (no linking)
+With `linking.mode: off`, it's a plain whitelist: non-whitelisted players are kicked with the `kickmessage`,
+which by default points them at your Discord to apply. Set `discord-invite: "discord.gg/yourserver"` in the
+config and it fills the `%DISCORD%` placeholder. Staff then add approved players manually with
+`/whitelist add <name>` or `<uuid>` (Bedrock gamertags work with the `.` prefix).
+
 ### Code-based linking (require-link-to-play)
 Players can prove they own a Minecraft account by linking it with a one-time code (the same idea as
 DiscordSRV's "require linking to play"). Enable the whitelist (`/whitelist on`) and set `discord-bot.linking.mode`:
