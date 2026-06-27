@@ -56,6 +56,15 @@ gaining that role automatically adds them to the whitelist; losing it removes th
 holders are also reconciled on startup. Receiving role changes requires the **Server Members Intent** to be enabled
 for the bot in the Discord developer portal.
 
+### Cracked / offline players (LimboAuth etc.)
+Cracked (offline-mode) accounts don't exist in Mojang's database, so they can't be looked up by name the
+normal way — and auth plugins like **LimboAuth** prefix cracked names with a `.`. To handle this, the plugin
+keeps a **username cache** (`usernamecache.yml`): every player that connects is recorded `name → uuid`, and
+`/whitelist add` checks the cache first. So a cracked player just needs to **attempt to join once** (they'll be
+cached even though they're kicked), then staff can add them by the exact name shown in the kick log, e.g.
+`/whitelist add .ibuyKhushi340`. This also covers Bedrock/Floodgate players. (Note: if your Bedrock `prefix`
+and your auth plugin's cracked prefix are both `.`, the cache is what disambiguates them.)
+
 ### Manual whitelist (no linking)
 With `linking.mode: off`, it's a plain whitelist: non-whitelisted players are kicked with the `kickmessage`,
 which by default points them at your Discord to apply. Set `discord-invite: "discord.gg/yourserver"` in the

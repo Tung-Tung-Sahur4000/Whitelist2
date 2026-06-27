@@ -46,6 +46,8 @@ public final class ServerConnectListener extends ProxyJoinListenerBase implement
         if (event.isCancelled() || event.getReason() != ServerConnectEvent.Reason.JOIN_PROXY) return;
 
         final BungeeSenderInfo player = new BungeeSenderInfo(event.getPlayer());
+        // Remember every player that connects (incl. cracked/Bedrock) so they can be whitelisted by name later.
+        plugin.cachePlayer(event.getPlayer().getUniqueId(), event.getPlayer().getName());
         if (plugin.isDebug()) {
             plugin.getLogger().info("Join permission check for " + event.getPlayer().getName()
                     + " - Permission: " + player.hasMaintenancePermission("bypass") + ", whitelist: " + settings.isWhitelisted(player.uuid()));

@@ -28,6 +28,7 @@ import eu.kennytv.maintenance.core.proxy.discord.DiscordBot;
 import eu.kennytv.maintenance.core.proxy.runnable.SingleMaintenanceRunnable;
 import eu.kennytv.maintenance.core.proxy.runnable.SingleMaintenanceScheduleRunnable;
 import eu.kennytv.maintenance.core.proxy.util.GeyserApiUtil;
+import eu.kennytv.maintenance.core.proxy.util.PlayerNameCache;
 import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
 import eu.kennytv.maintenance.core.runnable.MaintenanceRunnableBase;
 import eu.kennytv.maintenance.core.util.DiscordWebhook;
@@ -64,6 +65,7 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     private final Map<String, MaintenanceRunnableBase> serverTasks = new HashMap<>();
     protected SettingsProxy settingsProxy;
     protected DiscordBot discordBot;
+    protected PlayerNameCache playerNameCache;
 
     protected MaintenanceProxyPlugin(final String version, final ServerType serverType) {
         super(version, serverType);
@@ -259,6 +261,15 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     @Blocking
     @Nullable
     protected ProfileLookup doUUIDLookup(final String name) throws IOException {
+        // Username cache first. This is the only reliable way to resolve cracked/offline players (e.g. LimboAuth
+        // names with a '.' prefix) and Bedrock players, since they don't exist in the Mojang/Geyser databases.
+        if (playerNameCache != null) {
+            final ProfileLookup cached = playerNameCache.getProfile(name);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
         // Bedrock (Geyser/Floodgate) lookup: gamertags prefixed with the configured Bedrock prefix
         // are resolved against the Geyser global API instead of the Mojang API.
         final String bedrockPrefix = settingsProxy.getBedrockPrefix();
@@ -349,6 +360,28 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
     public SettingsProxy getSettingsProxy() {
         return settingsProxy;
+    }
+
+    /**
+     * Initializes the username cache. Call this once on enable (the data folder must exist).
+     */
+    public void initPlayerCache() {
+        playerNameCache = new PlayerNameCache(this);
+    }
+
+    /**
+     * Records a player's current name -> uuid in the cache so they can later be whitelisted by name,
+     * even if they are a cracked/offline or Bedrock player that Mojang/Geyser cannot resolve.
+     */
+    public void cachePlayer(final UUID uuid, final String name) {
+        if (playerNameCache != null) {
+            playerNameCache.cache(uuid, name);
+        }
+    }
+
+    @Nullable
+    public String getCachedName(final UUID uuid) {
+        return playerNameCache != null ? playerNameCache.getName(uuid) : null;
     }
 
     /**

@@ -111,6 +111,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
 
         continueLastEndtimer();
 
+        initPlayerCache();
         startDiscordBot();
 
         final PluginManager pluginManager = server.getPluginManager();
@@ -236,7 +237,14 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final UUID uuid) {
         final Optional<Player> player = server.getPlayer(uuid);
-        return CompletableFuture.completedFuture(player.map(VelocitySenderInfo::new).orElse(null));
+        if (player.isPresent()) {
+            return CompletableFuture.completedFuture(new VelocitySenderInfo(player.get()));
+        }
+        final String cachedName = getCachedName(uuid);
+        if (cachedName != null) {
+            return CompletableFuture.completedFuture(new ProxyOfflineSenderInfo(uuid, cachedName));
+        }
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

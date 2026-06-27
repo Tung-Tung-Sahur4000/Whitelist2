@@ -84,6 +84,7 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
         continueLastEndtimer();
         new Metrics(plugin, 742);
 
+        initPlayerCache();
         startDiscordBot();
 
         final Plugin serverListPlus = pm.getPlugin("ServerListPlus");
@@ -179,7 +180,14 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final UUID uuid) {
         final ProxiedPlayer player = getProxy().getPlayer(uuid);
-        return CompletableFuture.completedFuture(player != null ? new BungeeSenderInfo(player) : null);
+        if (player != null) {
+            return CompletableFuture.completedFuture(new BungeeSenderInfo(player));
+        }
+        final String cachedName = getCachedName(uuid);
+        if (cachedName != null) {
+            return CompletableFuture.completedFuture(new ProxyOfflineSenderInfo(uuid, cachedName));
+        }
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

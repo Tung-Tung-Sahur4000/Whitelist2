@@ -48,6 +48,8 @@ public final class ServerConnectListener extends ProxyJoinListenerBase {
         if (!event.getResult().isAllowed()) return;
 
         final VelocitySenderInfo sender = new VelocitySenderInfo(event.getPlayer());
+        // Remember every player that connects (incl. cracked/Bedrock) so they can be whitelisted by name later.
+        plugin.cachePlayer(event.getPlayer().getUniqueId(), event.getPlayer().getUsername());
         if (shouldKick(sender, false)) {
             final Server waitingServer = shouldConnectToWaitingServer(sender);
             // Do the actual connecting in the ServerPreConnectEvent handler if a waiting server exists
