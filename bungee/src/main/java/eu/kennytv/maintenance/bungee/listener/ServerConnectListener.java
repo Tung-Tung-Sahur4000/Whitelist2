@@ -55,7 +55,7 @@ public final class ServerConnectListener extends ProxyJoinListenerBase implement
             final Server waitingServer = shouldConnectToWaitingServer(player);
             if (waitingServer != null) {
                 event.setTarget(((BungeeServer) waitingServer).server());
-                player.send(settings.getMessage("sentToWaitingServer"));
+                player.send(plugin.getWaitingJoinMessage(player));
 
                 if (plugin.isDebug()) {
                     plugin.getLogger().info("Join to waiting server for " + event.getPlayer().getName());
@@ -65,7 +65,7 @@ public final class ServerConnectListener extends ProxyJoinListenerBase implement
 
             event.setCancelled(true);
 
-            player.disconnect(settings.getKickMessage());
+            player.disconnect(plugin.getJoinDenyMessage(player));
             if (settings.isJoinNotifications()) {
                 broadcastJoinNotification(player.name());
             }

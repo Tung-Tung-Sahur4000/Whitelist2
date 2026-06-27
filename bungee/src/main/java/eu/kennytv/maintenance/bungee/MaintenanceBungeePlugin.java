@@ -111,7 +111,7 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
     @Override
     protected void kickPlayersFromProxy() {
         for (final ProxiedPlayer player : getProxy().getPlayers()) {
-            if (!hasPermission(player, "bypass") && !settingsProxy.isWhitelisted(player.getUniqueId())) {
+            if (!hasPermission(player, "bypass") && !hasPermission(player, "whitelisted") && !settingsProxy.isWhitelisted(player.getUniqueId())) {
                 player.disconnect(ComponentUtil.toBadComponents(settingsProxy.getKickMessage()));
             }
         }
@@ -123,7 +123,7 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
         final ServerInfo fallbackServer = fallback != null ? ((BungeeServer) fallback).server() : null;
         final boolean checkForFallback = fallbackServer != null && !isMaintenance(fallback);
         for (final ProxiedPlayer player : ((BungeeServer) server).server().getPlayers()) {
-            if (!hasPermission(player, "bypass") && !settingsProxy.isWhitelisted(player.getUniqueId())) {
+            if (!hasPermission(player, "bypass") && !hasPermission(player, "whitelisted") && !settingsProxy.isWhitelisted(player.getUniqueId())) {
                 if (checkForFallback && fallbackServer.canAccess(player)) {
                     audiences.player(player).sendMessage(settingsProxy.getMessage("singleMaintenanceActivated", "%SERVER%", server.getName()));
                     player.connect(fallbackServer);
@@ -142,7 +142,7 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
         final ServerInfo serverInfo = ((BungeeServer) server).server();
         // Notifications done in global method
         for (final ProxiedPlayer player : getProxy().getPlayers()) {
-            if (hasPermission(player, "bypass") || settingsProxy.isWhitelisted(player.getUniqueId())) continue;
+            if (hasPermission(player, "bypass") || hasPermission(player, "whitelisted") || settingsProxy.isWhitelisted(player.getUniqueId())) continue;
             if (player.getServer() != null && player.getServer().getInfo().getName().equals(serverInfo.getName()))
                 continue;
             if (serverInfo.canAccess(player) && !isMaintenance(serverInfo)) {

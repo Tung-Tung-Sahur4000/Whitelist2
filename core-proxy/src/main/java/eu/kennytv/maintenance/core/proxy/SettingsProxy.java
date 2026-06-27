@@ -50,6 +50,11 @@ public final class SettingsProxy extends Settings {
     private String discordAutoWhitelistRoleId;
     private boolean discordRemoveOnRoleLoss;
     private boolean discordAllowLinking;
+    private String linkingMode;
+    private boolean linkingRequireRole;
+    private int linkCodeLength;
+    private int linkCodeExpirySeconds;
+    private int linkMaxAttemptsPerMinute;
 
     private Map<String, List<String>> commandsOnMaintenanceEnable;
     private Map<String, List<String>> commandsOnMaintenanceDisable;
@@ -89,6 +94,21 @@ public final class SettingsProxy extends Settings {
         discordAutoWhitelistRoleId = discordSection.getString("auto-whitelist-role-id", "");
         discordRemoveOnRoleLoss = discordSection.getBoolean("remove-on-role-loss", true);
         discordAllowLinking = discordSection.getBoolean("allow-linking", true);
+
+        final ConfigSection linkingSection = discordSection.getSection("linking");
+        if (linkingSection != null) {
+            linkingMode = normalizeLinkingMode(linkingSection.getString("mode", "off"));
+            linkingRequireRole = linkingSection.getBoolean("require-role", true);
+            linkCodeLength = linkingSection.getInt("code-length", 6);
+            linkCodeExpirySeconds = linkingSection.getInt("code-expiry-seconds", 600);
+            linkMaxAttemptsPerMinute = linkingSection.getInt("max-attempts-per-minute", 5);
+        } else {
+            linkingMode = "off";
+            linkingRequireRole = true;
+            linkCodeLength = 6;
+            linkCodeExpirySeconds = 600;
+            linkMaxAttemptsPerMinute = 5;
+        }
 
         commandsOnMaintenanceEnable = new HashMap<>();
         final ConfigSection enableCommandsSection = config.getSection("commands-on-single-maintenance-enable");
@@ -342,6 +362,45 @@ public final class SettingsProxy extends Settings {
 
     public boolean isDiscordAllowLinking() {
         return discordAllowLinking;
+    }
+
+    public boolean isLinkingEnforced() {
+        return !linkingMode.equals("off");
+    }
+
+    public boolean isLinkingKickMode() {
+        return linkingMode.equals("kick");
+    }
+
+    public boolean isLinkingLimboMode() {
+        return linkingMode.equals("limbo");
+    }
+
+    public boolean isLinkingRequireRole() {
+        return linkingRequireRole;
+    }
+
+    public int getLinkCodeLength() {
+        return linkCodeLength;
+    }
+
+    public int getLinkCodeExpirySeconds() {
+        return linkCodeExpirySeconds;
+    }
+
+    public int getLinkMaxAttemptsPerMinute() {
+        return linkMaxAttemptsPerMinute;
+    }
+
+    private static String normalizeLinkingMode(@Nullable final String mode) {
+        if (mode == null) {
+            return "off";
+        }
+        final String value = mode.toLowerCase(Locale.ROOT).trim();
+        return switch (value) {
+            case "kick", "limbo" -> value;
+            default -> "off";
+        };
     }
 
     public List<String> getCommandsOnMaintenanceEnable(final Server server) {

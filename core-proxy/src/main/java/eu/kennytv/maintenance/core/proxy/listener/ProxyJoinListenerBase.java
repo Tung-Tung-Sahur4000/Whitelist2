@@ -49,7 +49,7 @@ public abstract class ProxyJoinListenerBase extends JoinListenerBase {
     protected ServerConnectResult serverConnect(final ProxySenderInfo sender, final Server target, final boolean normalServerConnect) {
         // Check waiting server for global maintenance
         if (settings.isMaintenance()) {
-            if (sender.hasMaintenancePermission("bypass") || settings.isWhitelisted(sender.uuid())) return ALLOWED;
+            if (sender.hasMaintenancePermission("bypass") || sender.hasMaintenancePermission("whitelisted") || settings.isWhitelisted(sender.uuid())) return ALLOWED;
 
             final Server waitingServer = shouldConnectToWaitingServer(sender);
             // Should never be null, but just in case
@@ -65,13 +65,13 @@ public abstract class ProxyJoinListenerBase extends JoinListenerBase {
                 return DENIED;
             }
 
-            sender.send(settings.getMessage("sentToWaitingServer"));
+            sender.send(plugin.getWaitingJoinMessage(sender));
             return new ServerConnectResult(waitingServer);
         }
 
         // Single server maintenance
         if (!settings.isMaintenance(target.getName())) return ALLOWED;
-        if (sender.hasMaintenancePermission("bypass") || settings.isWhitelisted(sender.uuid())
+        if (sender.hasMaintenancePermission("bypass") || sender.hasMaintenancePermission("whitelisted") || settings.isWhitelisted(sender.uuid())
                 || sender.hasMaintenancePermission("singleserver.bypass." + target.getName().toLowerCase(Locale.ROOT))) {
             return ALLOWED;
         }
@@ -109,6 +109,8 @@ public abstract class ProxyJoinListenerBase extends JoinListenerBase {
      */
     @Nullable
     protected Server shouldConnectToWaitingServer(final ProxySenderInfo sender) {
+        // In 'kick' linking mode we never hold players on a waiting server - they are kicked with their code.
+        if (settings.isLinkingKickMode()) return null;
         if (settings.getWaitingServer() == null) return null;
 
         final Server waitingServer = plugin.getServer(settings.getWaitingServer());

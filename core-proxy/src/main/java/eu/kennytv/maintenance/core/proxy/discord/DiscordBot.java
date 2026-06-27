@@ -21,6 +21,9 @@ import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
 import eu.kennytv.maintenance.core.proxy.SettingsProxy;
 import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
 import eu.kennytv.maintenance.core.util.SenderInfo;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -32,9 +35,11 @@ import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleRemoveEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
@@ -67,12 +72,39 @@ public final class DiscordBot extends ListenerAdapter {
     private final MaintenanceProxyPlugin plugin;
     private final SettingsProxy settings;
     private final DiscordLinkManager linkManager;
+    private final LinkCodeManager linkCodeManager;
     private JDA jda;
 
     public DiscordBot(final MaintenanceProxyPlugin plugin, final SettingsProxy settings) {
         this.plugin = plugin;
         this.settings = settings;
         this.linkManager = new DiscordLinkManager(plugin);
+        this.linkCodeManager = new LinkCodeManager(settings);
+    }
+
+    public LinkCodeManager linkCodeManager() {
+        return linkCodeManager;
+    }
+
+    /**
+     * Generates (or reuses) the active one-time linking code for a player.
+     */
+    public String generateLinkCode(final UUID uuid, final String name) {
+        return linkCodeManager.generateCode(uuid, name);
+    }
+
+    /**
+     * @return the bot's display name, or a fallback if it is not connected yet
+     */
+    public String getBotName() {
+        try {
+            if (jda != null && jda.getSelfUser() != null) {
+                return jda.getSelfUser().getName();
+            }
+        } catch (final Exception ignored) {
+            // Not ready yet
+        }
+        return "the Discord bot";
     }
 
     /**
@@ -83,15 +115,14 @@ public final class DiscordBot extends ListenerAdapter {
      */
     public void start(final String token) {
         try {
-            final JDABuilder builder;
+            // DIRECT_MESSAGES lets the bot receive linking codes DMed to it (DM content needs no privileged intent).
+            final EnumSet<GatewayIntent> intents = EnumSet.of(GatewayIntent.DIRECT_MESSAGES);
             if (roleSyncEnabled()) {
                 // Receiving role changes and loading members requires the (privileged) Server Members Intent.
-                builder = JDABuilder.createLight(token, GatewayIntent.GUILD_MEMBERS);
-            } else {
-                builder = JDABuilder.createLight(token);
+                intents.add(GatewayIntent.GUILD_MEMBERS);
             }
 
-            jda = builder
+            jda = JDABuilder.createLight(token, intents)
                     .setActivity(Activity.watching("the whitelist"))
                     .addEventListeners(this)
                     .build();
@@ -361,6 +392,90 @@ public final class DiscordBot extends ListenerAdapter {
         }).onError(error ->
                 plugin.getLogger().warning("Could not load members of " + guild.getName()
                         + " for role sync. Make sure the 'Server Members Intent' is enabled for the bot."));
+    }
+
+    // --- Code-based linking (DM the bot a code) ---
+
+    @Override
+    public void onMessageReceived(final MessageReceivedEvent event) {
+        // Only react to direct messages from real users.
+        if (!event.isFromType(ChannelType.PRIVATE) || event.getAuthor().isBot()) {
+            return;
+        }
+
+        final String discordId = event.getAuthor().getId();
+        final String content = event.getMessage().getContentRaw().trim();
+        // Sanitize: only treat messages that are exactly the expected number of digits as a code attempt.
+        // Anything else is ignored, so the bot can't be spammed into doing work.
+        if (!content.matches("\\d{" + Math.max(4, settings.getLinkCodeLength()) + "}")) {
+            return;
+        }
+
+        if (linkCodeManager.isRateLimited(discordId)) {
+            reply(event, "⏳ Too many attempts. Please wait a minute and try again.");
+            return;
+        }
+
+        final LinkCodeManager.PendingLink pending = linkCodeManager.verifyAndConsume(content);
+        if (pending == null) {
+            linkCodeManager.recordFailedAttempt(discordId);
+            reply(event, "❌ That code is invalid or has expired. Get a new one in-game and try again.");
+            return;
+        }
+        linkCodeManager.clearAttempts(discordId);
+
+        // One Minecraft account can only be linked to one Discord user.
+        if (linkManager.isLinkedToOther(pending.uuid(), discordId)) {
+            reply(event, "❌ That Minecraft account is already linked to a different Discord account.");
+            return;
+        }
+
+        linkManager.link(discordId, pending.uuid(), pending.name());
+        finishCodeLink(event, discordId, pending);
+    }
+
+    private void finishCodeLink(final MessageReceivedEvent event, final String discordId, final LinkCodeManager.PendingLink pending) {
+        final String safeName = sanitizeName(pending.name());
+        if (!settings.isLinkingRequireRole() || !roleSyncEnabled()) {
+            settings.addWhitelistedPlayer(pending.uuid(), pending.name());
+            reply(event, "✅ Linked and whitelisted `" + safeName + "` - you can join now!");
+            return;
+        }
+
+        final Guild guild = resolveGuild();
+        if (guild == null) {
+            reply(event, "✅ Linked `" + safeName + "`. An admin still needs to give you the whitelist role.");
+            return;
+        }
+
+        guild.retrieveMemberById(discordId).queue(member -> {
+            if (hasAutoRole(member)) {
+                settings.addWhitelistedPlayer(pending.uuid(), pending.name());
+                reply(event, "✅ Linked and whitelisted `" + safeName + "` - you can join now!");
+            } else {
+                reply(event, "✅ Linked `" + safeName + "`. You'll be whitelisted once you receive the whitelist role.");
+            }
+        }, error -> reply(event, "✅ Linked `" + safeName + "`. (Could not verify your roles right now.)"));
+    }
+
+    private void reply(final MessageReceivedEvent event, final String message) {
+        // Never ping anyone, even if a (sanitized) name somehow contained mention-like text.
+        event.getChannel().sendMessage(message).setAllowedMentions(Collections.emptyList()).queue();
+    }
+
+    @Nullable
+    private Guild resolveGuild() {
+        final String guildId = settings.getDiscordGuildId();
+        if (guildId != null && !guildId.isEmpty()) {
+            return jda.getGuildById(guildId);
+        }
+        final List<Guild> guilds = jda.getGuilds();
+        return guilds.size() == 1 ? guilds.get(0) : null;
+    }
+
+    private String sanitizeName(final String name) {
+        // Strip anything that could break out of Discord markdown or inject mentions/backticks.
+        return name.replaceAll("[^A-Za-z0-9_ .]", "");
     }
 
     // --- Helpers ---

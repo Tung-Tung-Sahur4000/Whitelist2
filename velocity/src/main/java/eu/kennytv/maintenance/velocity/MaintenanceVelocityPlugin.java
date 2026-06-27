@@ -146,7 +146,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
     @Override
     protected void kickPlayersFromProxy() {
         for (final Player p : server.getAllPlayers()) {
-            if (!hasPermission(p, "bypass") && !settingsProxy.isWhitelisted(p.getUniqueId())) {
+            if (!hasPermission(p, "bypass") && !hasPermission(p, "whitelisted") && !settingsProxy.isWhitelisted(p.getUniqueId())) {
                 p.disconnect(settingsProxy.getKickMessage());
             }
         }
@@ -157,7 +157,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
         final RegisteredServer fallbackServer = fallback != null ? ((VelocityServer) fallback).server() : null;
         final boolean checkForFallback = fallbackServer != null && !isMaintenance(fallback);
         for (final Player player : ((VelocityServer) server).server().getPlayersConnected()) {
-            if (hasPermission(player, "bypass") || settingsProxy.isWhitelisted(player.getUniqueId())) {
+            if (hasPermission(player, "bypass") || hasPermission(player, "whitelisted") || settingsProxy.isWhitelisted(player.getUniqueId())) {
                 player.sendMessage(settingsProxy.getMessage("singleMaintenanceActivated", "%SERVER%", server.getName()));
                 continue;
             }
@@ -182,7 +182,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
         final RegisteredServer waitingServer = ((VelocityServer) server).server();
         // Notifications done in global method
         for (final Player player : this.server.getAllPlayers()) {
-            if (hasPermission(player, "bypass") || settingsProxy.isWhitelisted(player.getUniqueId())) continue;
+            if (hasPermission(player, "bypass") || hasPermission(player, "whitelisted") || settingsProxy.isWhitelisted(player.getUniqueId())) continue;
             if (player.getCurrentServer().isPresent() && player.getCurrentServer().get().getServerInfo().getName().equals(waitingServer.getServerInfo().getName()))
                 continue;
             if (!isMaintenance(waitingServer)) {

@@ -53,7 +53,7 @@ public final class ServerConnectListener extends ProxyJoinListenerBase {
             // Do the actual connecting in the ServerPreConnectEvent handler if a waiting server exists
             if (waitingServer != null) return;
 
-            event.setResult(ResultedEvent.ComponentResult.denied(settings.getKickMessage()));
+            event.setResult(ResultedEvent.ComponentResult.denied(plugin.getJoinDenyMessage(sender)));
             if (settings.isJoinNotifications()) {
                 broadcastJoinNotification(event.getPlayer().getUsername());
             }

@@ -56,6 +56,40 @@ gaining that role automatically adds them to the whitelist; losing it removes th
 holders are also reconciled on startup. Receiving role changes requires the **Server Members Intent** to be enabled
 for the bot in the Discord developer portal.
 
+### Code-based linking (require-link-to-play)
+Players can prove they own a Minecraft account by linking it with a one-time code (the same idea as
+DiscordSRV's "require linking to play"). Enable the whitelist (`/whitelist on`) and set `discord-bot.linking.mode`:
+
+```yaml
+discord-bot:
+  linking:
+    # off   = no code requirement (manual whitelist / role sync only)
+    # kick  = unlinked players are kicked at join and shown their code (DiscordSRV-style)
+    # limbo = unlinked players are sent to the 'waiting-server' (use a Limbo server) and shown their code there
+    mode: "off"
+    require-role: true          # a linked player must also have auto-whitelist-role to be whitelisted
+    code-length: 6              # 6+ digits recommended
+    code-expiry-seconds: 600
+    max-attempts-per-minute: 5  # anti-brute-force, per Discord user
+```
+
+Flow: a non-whitelisted player joins → they get a one-time code → they DM that code to the bot → they're
+linked and (if `require-role`) checked for the role → added to the whitelist → they can play. For `limbo` mode,
+point `waiting-server` at a lightweight Limbo (e.g. NanoLimbo/LimboAPI) so they can read their code there.
+
+**Security:** codes are `SecureRandom`-generated, single-use, expire, and are **bound to the connecting
+player's UUID** — so a cracked/offline player can never use a code to claim someone else's account. DM input is
+strictly validated (exactly N digits), verification attempts are rate-limited per Discord user, one Minecraft
+account maps to one Discord user, and bot replies never ping anyone. (Real impersonation protection for the
+underlying account still requires online-mode auth / Floodgate for Bedrock.)
+
+### Working with DiscordSRV or other linkers (the permission bridge)
+If you'd rather let **DiscordSRV** (or any role-sync plugin) own the Discord side, grant the
+`maintenance.whitelisted` permission to your "Whitelisted" group via LuckPerms and have DiscordSRV sync the
+Discord role to that group. ProxyWhitelist treats anyone with `maintenance.whitelisted` (or `maintenance.bypass`)
+as allowed — so no code coupling is needed. Any linker that can "run a command on link" can instead run
+`/whitelist add <player>`.
+
 ### Pairing with a chat bridge
 This bot is intentionally scoped to whitelisting/linking. If you also want a Minecraft⇄Discord chat bridge, run a
 dedicated bridge plugin such as [VelocityDiscord](https://modrinth.com/plugin/velocitydiscord) alongside it — they

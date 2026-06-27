@@ -50,7 +50,7 @@ public abstract class JoinListenerBase {
      * @return true if the sender should be kicked
      */
     protected boolean shouldKick(final SenderInfo sender, final boolean updateCheck) {
-        if (!settings.isMaintenance() || sender.hasMaintenancePermission("bypass") || settings.isWhitelisted(sender.uuid())) {
+        if (!settings.isMaintenance() || sender.hasMaintenancePermission("bypass") || sender.hasMaintenancePermission("whitelisted") || settings.isWhitelisted(sender.uuid())) {
             if (updateCheck) {
                 updateCheck(sender);
             }

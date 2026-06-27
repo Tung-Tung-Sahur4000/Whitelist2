@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
+import net.kyori.adventure.text.Component;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Nullable;
 
@@ -85,6 +86,9 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
      */
     public void startDiscordBot() {
         if (!settingsProxy.isDiscordBotEnabled()) {
+            if (settingsProxy.isLinkingEnforced()) {
+                getLogger().warning("Code-based linking is enabled, but the Discord bot is disabled - players will not be able to get a code! Enable the bot in the config.");
+            }
             return;
         }
         final String token = settingsProxy.getDiscordBotToken();
@@ -345,6 +349,31 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
     public SettingsProxy getSettingsProxy() {
         return settingsProxy;
+    }
+
+    /**
+     * Message shown when a non-whitelisted player is denied at join. If code-based linking is enabled, this
+     * generates the player's one-time code and tells them to DM it to the bot (DiscordSRV-style); otherwise
+     * the normal kick message is used.
+     */
+    public Component getJoinDenyMessage(final SenderInfo sender) {
+        if (settingsProxy.isLinkingEnforced() && discordBot != null) {
+            final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
+            return settingsProxy.getMessage("linkingKickMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
+        }
+        return settingsProxy.getKickMessage();
+    }
+
+    /**
+     * Message shown when a non-whitelisted player is sent to the waiting/limbo server. In 'limbo' linking mode
+     * this contains their one-time code so they can link from there.
+     */
+    public Component getWaitingJoinMessage(final SenderInfo sender) {
+        if (settingsProxy.isLinkingLimboMode() && discordBot != null) {
+            final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
+            return settingsProxy.getMessage("linkingLimboMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
+        }
+        return settingsProxy.getMessage("sentToWaitingServer");
     }
 
     @Nullable

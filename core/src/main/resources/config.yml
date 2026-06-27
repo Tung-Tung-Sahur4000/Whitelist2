@@ -184,6 +184,24 @@ discord-bot:
   # If true, members can link their own account with '/link <name>'. If false, only staff can add
   # players through '/whitelist add'.
   allow-linking: true
+  # Code-based linking: players prove they own a Minecraft account by linking it in-game.
+  # The whitelist must be enabled (/whitelist on) for this to take effect. Non-whitelisted players are
+  # given a one-time code and told to DM it to the bot; once they DM it (and have the role if required),
+  # they are added to the whitelist.
+  linking:
+    # off   = no code requirement (manual whitelist / role sync only).
+    # kick  = unlinked players are kicked at join with their code (like DiscordSRV's "require linking to play").
+    # limbo = unlinked players are sent to the 'waiting-server' (use a Limbo server) and shown their code there.
+    mode: "off"
+    # If true, a linked player must also have the auto-whitelist-role to actually be whitelisted.
+    require-role: true
+    # Number of digits in the linking code. 6+ is strongly recommended for security.
+    code-length: 6
+    # How long a code stays valid, in seconds.
+    code-expiry-seconds: 600
+    # Max wrong code guesses a single Discord user may make per minute before being temporarily blocked
+    # (anti-brute-force).
+    max-attempts-per-minute: 5
 
 # If disabled, you will no longer receive any messages if there is an update.
 # Not recommended to disable, as new versions generally tend to run better and with fewer bugs.
@@ -191,4 +209,4 @@ discord-bot:
 update-checks: true
 
 # Used for autoupdating the config, do not change this value.
-config-version: 12
+config-version: 13
