@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ProxyWhitelist — Discord Bot Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root{
+    --bg:#1e1f22; --panel:#2b2d31; --panel2:#313338; --line:#3f4147;
+    --text:#dbdee1; --muted:#949ba4; --blurple:#5865f2; --green:#57f287;
+    --red:#ed4245; --mc:#3ba55d; --yellow:#fee75c; --aqua:#3aa9c9;
+  }
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:36px 40px; width:1240px;
+  }
+  h1{ font-size:30px; font-weight:800; letter-spacing:.2px; }
+  h1 .pw{ color:var(--mc); } h1 .dc{ color:var(--blurple); }
+  .sub{ color:var(--muted); font-size:15px; margin-top:6px; margin-bottom:26px; }
+  h2{ font-size:18px; margin:30px 0 14px; display:flex; align-items:center; gap:10px;}
+  h2 .dot{ width:10px;height:10px;border-radius:50%;background:var(--blurple);display:inline-block;}
+  .row{ display:flex; gap:18px; align-items:stretch; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 18px 16px; }
+  .card h3{ font-size:15px; margin-bottom:12px; display:flex; align-items:center; gap:8px;}
+  .tag{ font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px; color:#fff;}
+  .t-staff{background:#9b59b6;} .t-link{background:var(--blurple);} .t-code{background:var(--mc);} .t-role{background:var(--aqua);}
+  .arch{ display:flex; align-items:center; gap:0; }
+  .node{ background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:14px 16px; text-align:center; flex:1;}
+  .node .big{ font-size:16px; font-weight:700; }
+  .node .small{ font-size:12px; color:var(--muted); margin-top:4px; }
+  .node.discord{ border-color:var(--blurple); }
+  .node.mc{ border-color:var(--mc); }
+  .conn{ flex:0 0 70px; text-align:center; color:var(--muted); font-size:12px; position:relative;}
+  .conn .ar{ font-size:22px; color:var(--blurple); line-height:1;}
+  .step{ background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:9px 12px; font-size:13.5px; line-height:1.35;}
+  .step b{ color:#fff; }
+  .step.ok{ border-left:3px solid var(--green); }
+  .step.no{ border-left:3px solid var(--red); }
+  .step.act{ border-left:3px solid var(--mc); }
+  .down{ text-align:center; color:#5b5e66; font-size:14px; margin:5px 0; }
+  .muted{ color:var(--muted); }
+  .pill{ display:inline-block; background:#1f2023; border:1px solid var(--line); border-radius:6px; padding:1px 7px; font-family:Consolas,monospace; font-size:12.5px; color:#e8b339;}
+  .trust{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .can{ border:1px solid #2e5b3a; background:#1d2a20; }
+  .cannot{ border:1px solid #5b2e2e; background:#2a1d1d; }
+  .can h3,.cannot h3{ font-size:15px; margin-bottom:10px;}
+  ul{ list-style:none; }
+  li{ font-size:13.5px; padding:5px 0 5px 26px; position:relative; line-height:1.4;}
+  .can li:before{ content:"✓"; position:absolute; left:4px; color:var(--green); font-weight:800;}
+  .cannot li:before{ content:"✕"; position:absolute; left:4px; color:var(--red); font-weight:800;}
+  .intents{ display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;}
+  .intent{ border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; background:var(--panel2);}
+  .intent b{ font-family:Consolas,monospace;}
+  .intent.on{ border-color:var(--green);} .intent.off{ border-color:var(--red);}
+  .intent .s{ display:block; color:var(--muted); font-size:11.5px; margin-top:2px;}
+  .foot{ margin-top:26px; color:var(--muted); font-size:12px; text-align:center;}
+  .codeword{ font-family:Consolas,monospace; color:var(--yellow); }
+</style>
+</head>
+<body>
+  <h1><span class="pw">ProxyWhitelist</span> &nbsp;×&nbsp; <span class="dc">Discord bot</span></h1>
+  <div class="sub">How the built-in Discord bot works — every action it can take, end to end. The whole bot is 3 small files.</div>
+
+  <h2><span class="dot"></span>Architecture &nbsp;<span class="muted" style="font-size:13px;font-weight:400">— what talks to what</span></h2>
+  <div class="arch">
+    <div class="node discord"><div class="big">Discord</div><div class="small">your server + members</div></div>
+    <div class="conn"><div class="ar">⇄</div>gateway<br>(JDA)</div>
+    <div class="node"><div class="big">DiscordBot</div><div class="small">slash cmds · DM codes · role sync</div></div>
+    <div class="conn"><div class="ar">→</div>add /<br>remove</div>
+    <div class="node mc"><div class="big">WhitelistedPlayers.yml</div><div class="small">uuid → name &nbsp;(+ Redis → other proxies)</div></div>
+  </div>
+  <div class="row" style="margin-top:12px;">
+    <div class="step" style="flex:1"><b>DiscordLinks.yml</b> <span class="muted">— discordId → uuid;name (links)</span></div>
+    <div class="step" style="flex:1"><b>Linking codes</b> <span class="muted">— in memory only, never on disk, expire ~10 min</span></div>
+    <div class="step" style="flex:1"><b>Bot token</b> <span class="muted">— only read from config.yml to log in</span></div>
+  </div>
+
+  <h2><span class="dot"></span>The four flows</h2>
+  <div class="grid2">
+
+    <div class="card">
+      <h3><span class="tag t-staff">STAFF</span> /whitelist add | remove | list</h3>
+      <div class="step">Staff runs <span class="pill">/whitelist add Notch</span></div>
+      <div class="down">▼</div>
+      <div class="step no">Allowed? <b>has role</b> or <b>Administrator</b> — else refused</div>
+      <div class="down">▼</div>
+      <div class="step">Resolve name → uuid <span class="muted">(online · cache · Mojang · Geyser)</span></div>
+      <div class="down">▼</div>
+      <div class="step act">addWhitelistedPlayer → <b>WhitelistedPlayers.yml</b></div>
+      <div class="down">▼</div>
+      <div class="step ok">Reply “✅ Added Notch”</div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag t-link">SELF</span> /link &lt;name&gt;</h3>
+      <div class="step">Member runs <span class="pill">/link Notch</span></div>
+      <div class="down">▼</div>
+      <div class="step no">Already linked to someone else? → refuse <span class="muted">(1 MC = 1 Discord)</span></div>
+      <div class="down">▼</div>
+      <div class="step act">Save link → <b>DiscordLinks.yml</b></div>
+      <div class="down">▼</div>
+      <div class="step ok">Has whitelist role already? → whitelist now</div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag t-code">CODE</span> prove you own the account</h3>
+      <div class="step">In MC: not whitelisted → kicked / sent to Limbo<br><b>with a 6-digit code</b> <span class="codeword">482913</span> <span class="muted">(bound to their UUID)</span></div>
+      <div class="down">▼ &nbsp;<span class="muted">player DMs the code to the bot</span></div>
+      <div class="step no">Exactly N digits? rate-limited? valid &amp; not expired?</div>
+      <div class="down">▼</div>
+      <div class="step act">Link Discord ↔ that MC account · check role (if required)</div>
+      <div class="down">▼</div>
+      <div class="step ok">Whitelisted → “you can join!”</div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag t-role">ROLE</span> Discord role drives the whitelist</h3>
+      <div class="step">Staff gives a member the <b>“Whitelisted”</b> role</div>
+      <div class="down">▼</div>
+      <div class="step">Bot gets <b>GuildMemberRoleAdd</b> event</div>
+      <div class="down">▼</div>
+      <div class="step act">Member is linked? → addWhitelistedPlayer</div>
+      <div class="down">▼</div>
+      <div class="step no">Role removed → removed from whitelist <span class="muted">(optional)</span></div>
+      <div class="step ok" style="margin-top:7px;">On startup: scans role holders &amp; syncs the whitelist to match</div>
+    </div>
+
+  </div>
+
+  <h2><span class="dot"></span>What it can &amp; cannot do</h2>
+  <div class="trust">
+    <div class="card can">
+      <h3 style="color:var(--green)">✅ It CAN</h3>
+      <ul>
+        <li>Log in with the token <b>you</b> put in config.yml</li>
+        <li>Receive its slash commands: /whitelist, /link, /unlink</li>
+        <li>Receive DMs — but only acts on messages that are <b>exactly the code digits</b>; all else ignored</li>
+        <li>Read a member’s <b>roles</b> (only to check the whitelist role)</li>
+        <li>Add / remove names in <b>WhitelistedPlayers.yml</b></li>
+      </ul>
+    </div>
+    <div class="card cannot">
+      <h3 style="color:var(--red)">❌ It CANNOT</h3>
+      <ul>
+        <li><b>Read your server chat</b> — it never requests the MESSAGE_CONTENT intent</li>
+        <li>Kick / ban members, change roles, delete messages, manage the server</li>
+        <li>Run arbitrary Minecraft commands or touch anything but the whitelist</li>
+        <li>Send the token anywhere — it only logs in with it</li>
+        <li>Ping @everyone / mention anyone (replies = mentions off)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="dot"></span>Gateway intents it requests <span class="muted" style="font-size:13px;font-weight:400">— verifiable in the Discord developer portal</span></h2>
+  <div class="intents">
+    <div class="intent on"><b>DIRECT_MESSAGES</b> — always<span class="s">to receive code DMs (DM content needs no privileged intent)</span></div>
+    <div class="intent on"><b>GUILD_MEMBERS</b> — only if role-sync is on<span class="s">to see who gains/loses the whitelist role (privileged)</span></div>
+    <div class="intent off"><b>MESSAGE_CONTENT</b> — never<span class="s">→ this is why it cannot read your server chat</span></div>
+  </div>
+
+  <div class="foot">3 files: DiscordBot.java · DiscordLinkManager.java · LinkCodeManager.java &nbsp;—&nbsp; in core-proxy/.../discord/ &nbsp;·&nbsp; see DISCORD.md</div>
+</body>
+</html>
