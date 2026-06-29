@@ -80,9 +80,11 @@ Staff: /whitelist add Notch
    │
    ├─ SettingsProxy.addWhitelistedPlayer(uuid, name)  →  WhitelistedPlayers.yml  (+ Redis if enabled)
    │
-   └─ reply "✅ Added Notch"
+   ├─ ephemeral "✅ Added Notch"   (only the staff member sees the command + this reply)
+   └─ public embed "✅ Notch has been whitelisted!"   (looks automatic - no visible command)
 ```
-`/whitelist remove` and `/whitelist list` work the same way (gated by the same permission).
+`/whitelist remove` and `/whitelist list` reply **ephemerally** (private to the staff member) and are gated by
+the same permission. Only `add` posts the public "whitelisted" embed.
 
 ### 3b. Self-service link — `/link <name>`
 ```

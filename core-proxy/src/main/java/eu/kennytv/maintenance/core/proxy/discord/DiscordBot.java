@@ -21,6 +21,8 @@ import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
 import eu.kennytv.maintenance.core.proxy.SettingsProxy;
 import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
 import eu.kennytv.maintenance.core.util.SenderInfo;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -28,12 +30,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleAddEvent;
@@ -224,7 +228,8 @@ public final class DiscordBot extends ListenerAdapter {
         }
 
         final String input = option.getAsString();
-        event.deferReply().queue();
+        // Ephemeral: the staff member's command and typed input stay private to them.
+        event.deferReply(true).queue();
         lookup(input).whenComplete((selected, ex) -> {
             if (ex != null || selected == null) {
                 event.getHook().sendMessage("❌ Could not find a player named `" + input + "`.").queue();
@@ -232,9 +237,14 @@ public final class DiscordBot extends ListenerAdapter {
             }
 
             final boolean added = settings.addWhitelistedPlayer(selected.uuid(), selected.name());
-            event.getHook().sendMessage(added
-                    ? "✅ Added `" + selected.name() + "` to the whitelist."
-                    : "ℹ️ `" + selected.name() + "` is already whitelisted.").queue();
+            if (added) {
+                // Quiet confirmation only the staff member sees...
+                event.getHook().sendMessage("✅ Added `" + selected.name() + "` to the whitelist.").queue();
+                // ...and a clean public embed so it looks automatic - no visible command, just the result.
+                event.getChannel().sendMessageEmbeds(whitelistedEmbed(selected.name())).queue();
+            } else {
+                event.getHook().sendMessage("ℹ️ `" + selected.name() + "` is already whitelisted.").queue();
+            }
         });
     }
 
@@ -252,7 +262,7 @@ public final class DiscordBot extends ListenerAdapter {
                 : settings.removeWhitelistedPlayer(input);
 
         if (removed) {
-            event.reply("✅ Removed `" + input + "` from the whitelist.").queue();
+            event.reply("✅ Removed `" + input + "` from the whitelist.").setEphemeral(true).queue();
         } else {
             event.reply("❌ `" + input + "` is not on the whitelist.").setEphemeral(true).queue();
         }
@@ -476,6 +486,18 @@ public final class DiscordBot extends ListenerAdapter {
     private String sanitizeName(final String name) {
         // Strip anything that could break out of Discord markdown or inject mentions/backticks.
         return name.replaceAll("[^A-Za-z0-9_ .]", "");
+    }
+
+    /**
+     * The public "X has been whitelisted" announcement embed. Kept clean so the action looks automatic.
+     */
+    private MessageEmbed whitelistedEmbed(final String name) {
+        final String safe = sanitizeName(name);
+        return new EmbedBuilder()
+                .setColor(0x57F287)
+                .setDescription("✅ **" + safe + "** has been whitelisted!")
+                .setThumbnail("https://mc-heads.net/avatar/" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "/100")
+                .build();
     }
 
     // --- Helpers ---
