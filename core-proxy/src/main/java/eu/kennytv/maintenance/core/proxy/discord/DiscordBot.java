@@ -489,7 +489,15 @@ public final class DiscordBot extends ListenerAdapter {
         }
         linkCodeManager.clearAttempts(discordId);
 
-        linkManager.link(discordId, pending.uuid(), pending.name());
+        // Link atomically — linkIfFree re-checks isLinkedToOther under the same lock as the write.
+        // This closes a TOCTOU window: two Discord users DMing the same code at the exact same instant
+        // could both pass the isLinkedToOther peek above before either recorded a link, causing the
+        // second link() to silently overwrite the first. linkIfFree() collapses the check and write
+        // into one synchronized operation so only one caller ever wins.
+        if (!linkManager.linkIfFree(discordId, pending.uuid(), pending.name())) {
+            reply(event, "❌ That Minecraft account was just linked to another Discord account. Contact a staff member if this was not you.");
+            return;
+        }
         finishCodeLink(event, discordId, pending);
     }
 
@@ -515,9 +523,13 @@ public final class DiscordBot extends ListenerAdapter {
                 if (error instanceof ErrorResponseException err
                         && err.getErrorResponse() == ErrorResponse.UNKNOWN_MEMBER) {
                     // The sender is not a member of the configured guild: reject the whitelist.
-                    // The link record is intentionally kept so the message "already linked" is shown
-                    // if they try again later; an admin or /unlink can clean it up.
-                    reply(event, "❌ You must join the Discord server before you can be whitelisted. Join first, then rejoin Minecraft to get a fresh code.");
+                    // The link record is intentionally kept so that subsequent attempts show
+                    // "already linked" rather than re-issuing a code. The player needs a staff
+                    // member to grant them the whitelist role once they join the guild, or an
+                    // admin can /unlink and have them start fresh.
+                    // NOTE: do NOT direct them to "get a fresh code" — the link is already stored
+                    // and they will see the linkingPendingApproval message on the next join, not a code.
+                    reply(event, "❌ You must join the Discord server before you can be whitelisted. Join the Discord server, then ask a staff member to give you the whitelist role.");
                 } else {
                     // Transient API error: linked but not whitelisted yet — an admin can /whitelist add manually.
                     reply(event, "✅ Linked `" + safeName + "`. (Could not verify your server membership right now — contact an admin to be whitelisted.)");

@@ -157,6 +157,27 @@ public final class DiscordLinkManager {
         return existing != null && !existing.equals(discordId);
     }
 
+    /**
+     * Atomically checks whether the given Minecraft UUID is free (not linked to any other Discord
+     * user) and, if so, links it to {@code discordId}.
+     *
+     * <p>This is the correct way to create a link from the code-verification flow. Using a separate
+     * {@link #isLinkedToOther} call followed by {@link #link} is a TOCTOU race: two Discord users
+     * sending the same code simultaneously can both pass the check before either records the link,
+     * causing the second write to silently overwrite the first and leave the data inconsistent.
+     * This method eliminates that window by holding the lock across both operations.
+     *
+     * @return {@code true} if the link was created; {@code false} if the UUID was already claimed
+     *         by a different Discord user (caller should reject and not whitelist)
+     */
+    public synchronized boolean linkIfFree(final String discordId, final UUID uuid, final String name) {
+        if (isLinkedToOther(uuid, discordId)) {
+            return false;
+        }
+        link(discordId, uuid, name);
+        return true;
+    }
+
     public synchronized void link(final String discordId, final UUID uuid, final String name) {
         // Remove stale indices for the old link this Discord ID might have had.
         final ProfileLookup old = linksByDiscordId.remove(discordId);

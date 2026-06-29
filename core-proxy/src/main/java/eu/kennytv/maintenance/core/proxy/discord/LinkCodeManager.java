@@ -68,11 +68,23 @@ public final class LinkCodeManager {
 
         final int length = Math.max(4, settings.getLinkCodeLength());
         final long expiresAt = System.currentTimeMillis() + settings.getLinkCodeExpirySeconds() * 1000L;
-        String code;
-        int guard = 0;
-        do {
-            code = randomDigits(length);
-        } while (codes.putIfAbsent(code, new PendingLink(uuid, name, expiresAt)) != null && ++guard < 10_000);
+        // Find a code value not already in use. putIfAbsent returns null on success (slot was empty).
+        // The collision guard is a hard upper bound — with 6+ digits and a tiny active-code pool this
+        // will never realistically be reached, but we must not store an un-inserted code if it somehow
+        // is (that would give the player a code the bot cannot verify).
+        String code = null;
+        for (int guard = 0; guard < 10_000; guard++) {
+            final String candidate = randomDigits(length);
+            if (codes.putIfAbsent(candidate, new PendingLink(uuid, name, expiresAt)) == null) {
+                code = candidate;
+                break;
+            }
+        }
+        if (code == null) {
+            // Should be unreachable in practice; generate an oversized emergency code and insert directly.
+            code = randomDigits(length + 4);
+            codes.put(code, new PendingLink(uuid, name, expiresAt));
+        }
 
         activeCodeByUuid.put(uuid, code);
         return code;
