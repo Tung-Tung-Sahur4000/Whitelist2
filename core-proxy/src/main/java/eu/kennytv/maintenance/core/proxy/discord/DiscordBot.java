@@ -94,7 +94,11 @@ public final class DiscordBot extends ListenerAdapter {
 
     /**
      * Generates (or reuses) the active one-time linking code for a player.
+     *
+     * @return the code, or {@code null} if the active-code pool is at capacity (bot flood in progress);
+     *         callers should display a "server busy" message rather than a code in that case
      */
+    @Nullable
     public String generateLinkCode(final UUID uuid, final String name) {
         return linkCodeManager.generateCode(uuid, name);
     }

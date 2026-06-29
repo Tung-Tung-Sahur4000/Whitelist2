@@ -37,15 +37,47 @@ import org.jetbrains.annotations.Nullable;
  *         of valid codes tiny.</li>
  *     <li>Verification attempts are rate-limited per Discord user to make brute-forcing infeasible.</li>
  * </ul>
+ *
+ * <p>Bot-flood / DoS hardening:
+ * <ul>
+ *     <li>{@link #purgeExpired()} is throttled to run at most once every {@value #PURGE_INTERVAL_MILLIS} ms.
+ *         Without throttling, every connection event triggers a full map scan, creating O(N²) CPU work during
+ *         a connection flood (N connections each scanning N active codes = N² iterations per minute).</li>
+ *     <li>The active-code pool is hard-capped at {@value #MAX_ACTIVE_CODES} entries. A bot flood that exhausts
+ *         this cap causes {@link #generateCode} to return {@code null} for new players; callers should display
+ *         a "server busy" message. Players who already have an active code are never affected by the cap.</li>
+ * </ul>
  */
 public final class LinkCodeManager {
 
     private static final long ATTEMPT_WINDOW_MILLIS = 60_000L;
+    /**
+     * Minimum interval between full map scans in {@link #purgeExpired()}.
+     * During a bot flood, connections arrive far faster than codes expire, so scanning on every
+     * connection wastes CPU proportionally to pool size. Throttling to once per 5 s caps the
+     * total scan work to O(N / 5) regardless of connection rate.
+     */
+    private static final long PURGE_INTERVAL_MILLIS = 5_000L;
+    /**
+     * Hard upper bound on the number of simultaneously active linking codes.
+     * With a 10-minute expiry and this cap: the plugin tolerates a sustained bot-join rate of up to
+     * MAX_ACTIVE_CODES / (expiry_seconds) connections per second before rejecting new code requests.
+     * At default settings (600 s expiry, 2000 cap): ~3.3 new unique bots/second before cap is hit.
+     * Players who already have an active code are always served from the existing entry and are
+     * unaffected by the cap.
+     */
+    private static final int MAX_ACTIVE_CODES = 2_000;
+
     private final SettingsProxy settings;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, PendingLink> codes = new ConcurrentHashMap<>();
     private final Map<UUID, String> activeCodeByUuid = new ConcurrentHashMap<>();
     private final Map<String, Attempts> attemptsByUser = new ConcurrentHashMap<>();
+    /**
+     * Timestamp of the last {@link #purgeExpired()} scan. Volatile so concurrent calls from
+     * different threads all see the latest value without locking.
+     */
+    private volatile long lastPurgeMs = 0L;
 
     public LinkCodeManager(final SettingsProxy settings) {
         this.settings = settings;
@@ -54,16 +86,30 @@ public final class LinkCodeManager {
     /**
      * Returns the active code for the player, generating a new one if none is active.
      * The code is bound to the given uuid and name.
+     *
+     * @return the code string, or {@code null} if the active-code pool is at capacity (bot flood);
+     *         callers should display a "server is busy" message in that case
      */
+    @Nullable
     public String generateCode(final UUID uuid, final String name) {
-        purgeExpired();
+        maybePurgeExpired();
 
+        // Idempotent: return the same code if the player already has a valid one.
+        // This covers the "rejoin before expiry" case and is unaffected by the pool cap.
         final String existing = activeCodeByUuid.get(uuid);
         if (existing != null) {
             final PendingLink pending = codes.get(existing);
             if (pending != null && !pending.isExpired()) {
                 return existing;
             }
+        }
+
+        // Enforce the pool cap for new entries only. Existing players (handled above) are exempt.
+        // This bounds memory usage and prevents the code pool from growing without limit during a
+        // bot flood. The cap is checked after maybePurgeExpired() so freshly-expired entries are
+        // already gone and the count is as accurate as possible.
+        if (codes.size() >= MAX_ACTIVE_CODES) {
+            return null;
         }
 
         final int length = Math.max(4, settings.getLinkCodeLength());
@@ -107,7 +153,7 @@ public final class LinkCodeManager {
      */
     @Nullable
     public PendingLink verifyAndConsume(final String code) {
-        purgeExpired();
+        maybePurgeExpired();
 
         final PendingLink pending = codes.remove(code);
         if (pending == null || pending.isExpired()) {
@@ -146,8 +192,23 @@ public final class LinkCodeManager {
         attemptsByUser.remove(discordUserId);
     }
 
-    private void purgeExpired() {
+    /**
+     * Runs {@link #purgeExpired()} only if at least {@value #PURGE_INTERVAL_MILLIS} ms have elapsed
+     * since the last scan. This prevents O(N²) CPU usage during connection floods: without throttling,
+     * every new connection would scan the entire codes map, so N simultaneous bot connections would
+     * trigger N × N = N² map iterations. With throttling, the scan runs at most once per interval
+     * regardless of how many connections arrive.
+     */
+    private void maybePurgeExpired() {
         final long now = System.currentTimeMillis();
+        if (now - lastPurgeMs < PURGE_INTERVAL_MILLIS) {
+            return;
+        }
+        lastPurgeMs = now;
+        purgeExpired(now);
+    }
+
+    private void purgeExpired(final long now) {
         codes.entrySet().removeIf(entry -> {
             if (entry.getValue().expiresAt() < now) {
                 activeCodeByUuid.remove(entry.getValue().uuid(), entry.getKey());

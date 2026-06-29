@@ -426,7 +426,13 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
+            // null means the active-code pool is at capacity — bot flood in progress.
+            // Show a "server busy" message so real players know to try again rather than
+            // thinking they need to do anything with Discord.
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
+            if (code == null) {
+                return settingsProxy.getMessage("linkingServerBusy");
+            }
             return settingsProxy.getMessage("linkingKickMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
         }
         return settingsProxy.getKickMessage();
@@ -444,7 +450,11 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
+            // null means the active-code pool is at capacity — bot flood in progress.
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
+            if (code == null) {
+                return settingsProxy.getMessage("linkingServerBusy");
+            }
             return settingsProxy.getMessage("linkingLimboMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
         }
         return settingsProxy.getMessage("sentToWaitingServer");
