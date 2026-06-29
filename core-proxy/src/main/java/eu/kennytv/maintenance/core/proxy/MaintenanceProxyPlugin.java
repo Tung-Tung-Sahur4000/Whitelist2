@@ -396,6 +396,10 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
      */
     public Component getJoinDenyMessage(final SenderInfo sender) {
         if (settingsProxy.isLinkingEnforced() && discordBot != null) {
+            // Already linked but not whitelisted yet (waiting for the role): don't issue a new code.
+            if (discordBot.isLinked(sender.uuid())) {
+                return settingsProxy.getMessage("linkingPendingApproval");
+            }
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
             return settingsProxy.getMessage("linkingKickMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
         }
@@ -408,6 +412,10 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
      */
     public Component getWaitingJoinMessage(final SenderInfo sender) {
         if (settingsProxy.isLinkingLimboMode() && discordBot != null) {
+            // Already linked but not whitelisted yet (waiting for the role): don't issue a new code.
+            if (discordBot.isLinked(sender.uuid())) {
+                return settingsProxy.getMessage("linkingPendingApproval");
+            }
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
             return settingsProxy.getMessage("linkingLimboMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
         }

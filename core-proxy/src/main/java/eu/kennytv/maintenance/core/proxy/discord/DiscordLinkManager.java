@@ -112,6 +112,13 @@ public final class DiscordLinkManager {
         return existing != null && !existing.equals(discordId);
     }
 
+    /**
+     * @return true if the given Minecraft account is already linked to any Discord user
+     */
+    public synchronized boolean isLinked(final UUID uuid) {
+        return discordIdByUuid.containsKey(uuid);
+    }
+
     public synchronized void link(final String discordId, final UUID uuid, final String name) {
         final ProfileLookup old = linksByDiscordId.remove(discordId);
         if (old != null) {

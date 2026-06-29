@@ -86,7 +86,20 @@ Staff: /whitelist add Notch
 `/whitelist remove` and `/whitelist list` reply **ephemerally** (private to the staff member) and are gated by
 the same permission. Only `add` posts the public "whitelisted" embed.
 
-### 3b. Self-service link — `/link <name>`
+### Security of the linking system
+| Concern | Protection |
+|---------|-----------|
+| Guessing a code (brute force) | Codes are `SecureRandom`, **per-user rate-limited**, expire (~10 min), single-use, and only exist briefly while a player is mid-link. A guess is only useful for the few seconds a specific code is active. |
+| Claiming **someone else's** account | The code is **bound to the joining player's UUID**, so it can only ever link *that* account. While code-linking is on, `/link <name>` (which would trust a typed name) is **disabled** — everyone must prove ownership via the in-game code. |
+| Hijacking an already-linked account | One Minecraft account maps to one Discord user; a second linker is refused. Already-linked players are **not** re-issued a code on rejoin. |
+| Markdown / mention injection via names | Names are sanitized and all bot replies set *allowed mentions = none*. |
+| Reading server chat / abusing the bot | No `MESSAGE_CONTENT` intent; DMs are ignored unless they are exactly the code digits. |
+
+> If you run with `linking.mode: off` and `allow-linking: true`, the `/link <name>` convenience is available but
+> trusts the typed name (someone could "squat" a name they don't own). With `require-role: true` the impact is
+> limited to squatting. Set `allow-linking: false` to force the secure code flow.
+
+### 3b. Self-service link — `/link <name>` (only when code-linking is OFF)
 ```
 Member: /link Notch
    │

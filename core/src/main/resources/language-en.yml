@@ -7,6 +7,7 @@ noPermission: "<red>You do not have the permission to execute that command."
 kickmessage: "<red>You are not whitelisted!<br><gray>Join our Discord to apply: <yellow>%DISCORD%"
 linkingKickMessage: "<red>You need to link your Discord account to play!<br><gray>Send a DM to <yellow>%BOT%<gray> on Discord containing just this code:<br><gold><bold>%CODE%"
 linkingLimboMessage: "<prefix><gray>To get access, link your Discord account.<br><gray>Send a DM to <yellow>%BOT%<gray> containing just this code: <gold><bold>%CODE%"
+linkingPendingApproval: "<gray>Your Discord account is already linked.<br>You'll be let in once you receive the whitelist role on Discord."
 maintenanceActivated: "<prefix><gold>The whitelist is now enabled."
 maintenanceDeactivated: "<prefix><gold>The whitelist is now disabled."
 maintenanceStatusOn: "<prefix><gold>The whitelist is currently <green>enabled<gold>."
@@ -124,4 +125,4 @@ webhookSingleMaintenanceDeactivated: "Whitelist disabled on `%SERVER%`."
 webhookSingleStarttimerStarted: "The whitelist will be enabled on `%SERVER%` <t:%TIMESTAMP%:R> (`%TIME%`)."
 webhookSingleEndtimerStarted: "The whitelist will be disabled on `%SERVER%` <t:%TIMESTAMP%:R> (`%TIME%`)."
 #Used for autoupdating the language file, do not change this value.
-language-version: 7
+language-version: 8

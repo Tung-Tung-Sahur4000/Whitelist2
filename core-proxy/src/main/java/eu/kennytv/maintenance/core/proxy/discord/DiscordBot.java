@@ -98,6 +98,13 @@ public final class DiscordBot extends ListenerAdapter {
     }
 
     /**
+     * @return true if the Minecraft account is already linked to a Discord user
+     */
+    public boolean isLinked(final UUID uuid) {
+        return linkManager.isLinked(uuid);
+    }
+
+    /**
      * @return the bot's display name, or a fallback if it is not connected yet
      */
     public String getBotName() {
@@ -291,6 +298,15 @@ public final class DiscordBot extends ListenerAdapter {
     private void handleLink(final SlashCommandInteractionEvent event) {
         if (!settings.isDiscordAllowLinking()) {
             event.reply("Account linking is disabled on this server.").setEphemeral(true).queue();
+            return;
+        }
+
+        // Security: when code-based linking is active, do NOT allow linking by typing a name (anyone could claim
+        // someone else's account). The in-game code proves ownership, so direct the user there instead.
+        if (settings.isLinkingEnforced()) {
+            event.reply("To link, just join the server - you'll be shown a code to DM me here. "
+                    + "(Linking by name is disabled while code linking is on, so nobody can claim an account that isn't theirs.)")
+                    .setEphemeral(true).queue();
             return;
         }
 
