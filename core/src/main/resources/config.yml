@@ -195,6 +195,26 @@ discord-bot:
   # The whitelist must be enabled (/whitelist on) for this to take effect. Non-whitelisted players are
   # given a one-time code and told to DM it to the bot; once they DM it (and have the role if required),
   # they are added to the whitelist.
+  #
+  # ─── CRACKED / OFFLINE-MODE SERVER SECURITY NOTICE ───────────────────────────────────────────────
+  # On a cracked (offline-mode) proxy, Minecraft usernames are NOT authenticated. This means:
+  #
+  # 1. USERNAME COLLISION / WHITELIST BYPASS: Two players joining with the same username share the
+  #    same offline UUID and the same whitelist entry. Anyone who knows a whitelisted player's username
+  #    can join using it and bypass the whitelist. This cannot be fixed at the plugin level.
+  #    Mitigation: run an auth plugin (e.g. LimboAuth, AuthMe Velocity) so that login is protected by
+  #    a password known only to the real player.
+  #
+  # 2. CODE THEFT RACE: Because two players with the same username share the same UUID, they are shown
+  #    the same linking code. The first Discord user to DM the code to the bot wins the link. To reduce
+  #    this window, increase 'code-length' (8+ recommended for cracked servers).
+  #
+  # 3. UUID DRIFT: Some cracked clients generate a fresh UUID each session. The plugin detects this
+  #    and falls back to a name-based linked check, so already-linked players still see the
+  #    "pending approval" message rather than a new code. However, the whitelist entry uses the UUID
+  #    from link-time; if the UUID drifted, the player will still be blocked until an admin re-adds
+  #    them with '/whitelist add <name>' which re-resolves their current UUID.
+  # ──────────────────────────────────────────────────────────────────────────────────────────────────
   linking:
     # off   = no code requirement (manual whitelist / role sync only).
     # kick  = unlinked players are kicked at join with their code (like DiscordSRV's "require linking to play").
@@ -202,9 +222,11 @@ discord-bot:
     mode: "off"
     # If true, a linked player must also have the auto-whitelist-role to actually be whitelisted.
     require-role: true
-    # Number of digits in the linking code. 6+ is strongly recommended for security.
+    # Number of digits in the linking code.
+    # 6 is the minimum recommended for online-mode servers.
+    # 8+ is strongly recommended for cracked/offline-mode servers (reduces code-theft race window).
     code-length: 6
-    # How long a code stays valid, in seconds.
+    # How long a code stays valid, in seconds. Players must DM the bot within this window.
     code-expiry-seconds: 600
     # Max wrong code guesses a single Discord user may make per minute before being temporarily blocked
     # (anti-brute-force).

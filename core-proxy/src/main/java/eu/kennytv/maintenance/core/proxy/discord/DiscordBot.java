@@ -107,6 +107,17 @@ public final class DiscordBot extends ListenerAdapter {
     }
 
     /**
+     * Secondary link check by player name (case-insensitive). Used as a fallback on cracked/offline
+     * servers where the same player may have a different UUID each session (UUID drift).
+     *
+     * @return true if any link exists for the given Minecraft username
+     * @see DiscordLinkManager#isLinkedByName(String)
+     */
+    public boolean isLinkedByName(final String name) {
+        return linkManager.isLinkedByName(name);
+    }
+
+    /**
      * @return the bot's display name, or a fallback if it is not connected yet
      */
     public String getBotName() {

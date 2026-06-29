@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -36,6 +37,15 @@ import org.jetbrains.annotations.Nullable;
  * Keys are stored with an {@code id_} prefix so the (numeric) Discord snowflake ids are not parsed as
  * numbers by the YAML loader. Values are stored as {@code <uuid>;<name>}.
  * <p>
+ * Three indices are maintained for O(1) lookup in all directions:
+ * <ul>
+ *   <li>{@code linksByDiscordId} — Discord ID → profile (primary store)</li>
+ *   <li>{@code discordIdByUuid}  — Minecraft UUID → Discord ID</li>
+ *   <li>{@code discordIdByLowercaseName} — lowercase Minecraft name → Discord ID (cracked-server fallback)</li>
+ * </ul>
+ * The name index is a secondary safeguard for offline/cracked servers where the same player can appear
+ * with a different UUID across sessions (e.g. different proxy software, case change in username).
+ * <p>
  * All methods are synchronized as they are accessed from JDA's event threads.
  */
 public final class DiscordLinkManager {
@@ -45,6 +55,14 @@ public final class DiscordLinkManager {
     private final File file;
     private final Map<String, ProfileLookup> linksByDiscordId = new HashMap<>();
     private final Map<UUID, String> discordIdByUuid = new HashMap<>();
+    /**
+     * Secondary index: lowercase Minecraft name → Discord ID.
+     * Used on cracked/offline servers where the same player can join with a different UUID each
+     * session (e.g. UUID drift, different proxy offline UUID algorithm, case mismatch).
+     * Checking by name in addition to UUID prevents the "new code on every rejoin" symptom when
+     * the link IS present but the UUID stored at link-time no longer matches the current session UUID.
+     */
+    private final Map<String, String> discordIdByLowercaseName = new HashMap<>();
     private Config config;
 
     public DiscordLinkManager(final MaintenanceProxyPlugin plugin) {
@@ -75,6 +93,7 @@ public final class DiscordLinkManager {
     private void load() {
         linksByDiscordId.clear();
         discordIdByUuid.clear();
+        discordIdByLowercaseName.clear();
         for (final Map.Entry<String, Object> entry : config.getValues().entrySet()) {
             final String key = entry.getKey();
             if (!key.startsWith(KEY_PREFIX)) {
@@ -93,6 +112,7 @@ public final class DiscordLinkManager {
                 final String name = value.substring(idx + 1);
                 linksByDiscordId.put(discordId, new ProfileLookup(uuid, name));
                 discordIdByUuid.put(uuid, discordId);
+                discordIdByLowercaseName.put(name.toLowerCase(Locale.ROOT), discordId);
             } catch (final IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid DiscordLinks entry: " + key);
             }
@@ -105,28 +125,49 @@ public final class DiscordLinkManager {
     }
 
     /**
-     * @return true if the given Minecraft account is already linked to a different Discord user
+     * @return true if the given Minecraft UUID is already linked to any Discord user
+     */
+    public synchronized boolean isLinked(final UUID uuid) {
+        return discordIdByUuid.containsKey(uuid);
+    }
+
+    /**
+     * Secondary link check by player name (case-insensitive).
+     *
+     * <p>This is a fallback for offline/cracked servers where the same player can have a different
+     * UUID each session. If {@link #isLinked(UUID)} returns false but this returns true, the player's
+     * account IS linked — their UUID just drifted between sessions. In that case the join-deny path
+     * should show the "pending approval" message rather than issuing a fresh code.
+     *
+     * <p><b>Security note:</b> on a cracked server, usernames are not authenticated, so this check
+     * alone is not a reliable identity proof. It is intentionally used only to avoid re-issuing codes
+     * to an already-linked name, not to grant additional access.
+     *
+     * @return true if a link exists for that player name
+     */
+    public synchronized boolean isLinkedByName(final String name) {
+        return discordIdByLowercaseName.containsKey(name.toLowerCase(Locale.ROOT));
+    }
+
+    /**
+     * @return true if the given Minecraft UUID is already linked to a different Discord user
      */
     public synchronized boolean isLinkedToOther(final UUID uuid, final String discordId) {
         final String existing = discordIdByUuid.get(uuid);
         return existing != null && !existing.equals(discordId);
     }
 
-    /**
-     * @return true if the given Minecraft account is already linked to any Discord user
-     */
-    public synchronized boolean isLinked(final UUID uuid) {
-        return discordIdByUuid.containsKey(uuid);
-    }
-
     public synchronized void link(final String discordId, final UUID uuid, final String name) {
+        // Remove stale indices for the old link this Discord ID might have had.
         final ProfileLookup old = linksByDiscordId.remove(discordId);
         if (old != null) {
             discordIdByUuid.remove(old.uuid());
+            discordIdByLowercaseName.remove(old.name().toLowerCase(Locale.ROOT));
         }
 
         linksByDiscordId.put(discordId, new ProfileLookup(uuid, name));
         discordIdByUuid.put(uuid, discordId);
+        discordIdByLowercaseName.put(name.toLowerCase(Locale.ROOT), discordId);
         config.set(KEY_PREFIX + discordId, uuid + ";" + name);
         save();
     }
@@ -136,6 +177,7 @@ public final class DiscordLinkManager {
         final ProfileLookup removed = linksByDiscordId.remove(discordId);
         if (removed != null) {
             discordIdByUuid.remove(removed.uuid());
+            discordIdByLowercaseName.remove(removed.name().toLowerCase(Locale.ROOT));
             config.remove(KEY_PREFIX + discordId);
             save();
         }

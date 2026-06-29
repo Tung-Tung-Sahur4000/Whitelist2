@@ -104,6 +104,21 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
         discordBot = new DiscordBot(this, settingsProxy);
         async(() -> discordBot.start(token));
+
+        if (settingsProxy.isLinkingEnforced()) {
+            getLogger().warning("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            getLogger().warning("Code-based linking is active. CRACKED/OFFLINE SERVER NOTICE:");
+            getLogger().warning("  On a cracked server, usernames are not authenticated.");
+            getLogger().warning("  Any player can join with ANY username, so:");
+            getLogger().warning("  - Two players with the same name share the same UUID and");
+            getLogger().warning("    whitelist entry (username-collision / whitelist bypass).");
+            getLogger().warning("  - The linking code shown at join is the same for all players");
+            getLogger().warning("    sharing that username (code-theft race condition).");
+            getLogger().warning("  Mitigation: use an auth plugin (e.g. LimboAuth) and set");
+            getLogger().warning("  'code-length' to 8+ in config.yml to reduce risk.");
+            getLogger().warning("  See the 'linking:' block in config.yml for full details.");
+            getLogger().warning("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        }
     }
 
     @Override
@@ -393,11 +408,22 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
      * Message shown when a non-whitelisted player is denied at join. If code-based linking is enabled, this
      * generates the player's one-time code and tells them to DM it to the bot (DiscordSRV-style); otherwise
      * the normal kick message is used.
+     *
+     * <p>The "already linked" check has two tiers:
+     * <ol>
+     *   <li><b>UUID-based</b> (authoritative): the UUID stored at link-time matches the current session UUID.</li>
+     *   <li><b>Name-based fallback</b>: the link was recorded under this player name but a different UUID.
+     *       This happens on offline/cracked servers when the same player's UUID changes across sessions
+     *       (e.g. they changed the case of their username, or are on different proxy software). In that
+     *       case we still show "pending approval" instead of issuing a fresh code, because the link exists.</li>
+     * </ol>
+     * Note: on a cracked server the name check is not an authentication proof — any player can claim any
+     * username. The fallback only prevents re-issuing codes; it does not grant additional access.
      */
     public Component getJoinDenyMessage(final SenderInfo sender) {
         if (settingsProxy.isLinkingEnforced() && discordBot != null) {
-            // Already linked but not whitelisted yet (waiting for the role): don't issue a new code.
-            if (discordBot.isLinked(sender.uuid())) {
+            // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
+            if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
@@ -409,11 +435,13 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     /**
      * Message shown when a non-whitelisted player is sent to the waiting/limbo server. In 'limbo' linking mode
      * this contains their one-time code so they can link from there.
+     *
+     * <p>Uses the same two-tier linked check as {@link #getJoinDenyMessage(SenderInfo)}.
      */
     public Component getWaitingJoinMessage(final SenderInfo sender) {
         if (settingsProxy.isLinkingLimboMode() && discordBot != null) {
-            // Already linked but not whitelisted yet (waiting for the role): don't issue a new code.
-            if (discordBot.isLinked(sender.uuid())) {
+            // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
+            if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
             final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
