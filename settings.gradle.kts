@@ -6,6 +6,7 @@ dependencyResolutionManagement {
         maven("https://repo.spongepowered.org/repository/maven-public/")
         maven("https://repo.codemc.io/repository/maven-public/")
         maven("https://repo.dmulloy2.net/repository/public/")
+        maven("https://repo.velocityctd.com/snapshots")
         mavenCentral()
     }
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)

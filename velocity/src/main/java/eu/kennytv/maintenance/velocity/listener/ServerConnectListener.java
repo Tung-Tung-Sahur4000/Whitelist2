@@ -101,7 +101,7 @@ public final class ServerConnectListener extends ProxyJoinListenerBase {
         sendJoinMessage(((VelocityServer) server).server().getPlayersConnected(), name);
     }
 
-    private void sendJoinMessage(final Iterable<Player> players, final String name) {
+    private void sendJoinMessage(final Iterable<? extends Player> players, final String name) {
         final Component message = settings.getMessage("joinNotification", "%PLAYER%", name);
         for (final Player player : players) {
             if (plugin.hasPermission(player, "joinnotification")) {

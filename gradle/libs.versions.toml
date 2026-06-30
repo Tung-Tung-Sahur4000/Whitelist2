@@ -24,7 +24,7 @@ serverlistplus = "3.5.0"
 paper = "1.21.11-R0.1-SNAPSHOT"
 bungee = "1.21-R0.4-SNAPSHOT"
 sponge = "17.0.0"
-velocity = "3.4.0"
+velocity = "3.5.0-SNAPSHOT"
 
 junitVer = "6.0.3"
 
@@ -58,7 +58,7 @@ serverlistplus = { group = "net.minecrell", name = "ServerListPlus", version.ref
 paper = { group = "io.papermc.paper", name = "paper-api", version.ref = "paper" }
 bungee = { group = "net.md-5", name = "bungeecord-api", version.ref = "bungee" }
 sponge = { group = "org.spongepowered", name = "spongeapi", version.ref = "sponge" }
-velocity = { group = "com.velocitypowered", name = "velocity-api", version.ref = "velocity" }
+velocity = { group = "com.velocityctd", name = "velocity-api", version.ref = "velocity" }
 
 jupiterApi = { group = "org.junit.jupiter", name = "junit-jupiter-api", version.ref = "junitVer" }
 jupiterEngine = { group = "org.junit.jupiter", name = "junit-jupiter-engine", version.ref = "junitVer" }

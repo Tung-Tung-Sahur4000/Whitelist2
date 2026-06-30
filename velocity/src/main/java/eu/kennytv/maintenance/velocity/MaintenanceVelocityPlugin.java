@@ -208,7 +208,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
     @Override
     @Nullable
     public Server getServer(final String server) {
-        final Optional<RegisteredServer> serverInfo = this.server.getServer(server);
+        final Optional<? extends RegisteredServer> serverInfo = this.server.getServer(server);
         return serverInfo.map(VelocityServer::new).orElse(null);
     }
 
@@ -219,7 +219,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
 
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final String name) {
-        final Optional<Player> player = server.getPlayer(name);
+        final Optional<? extends Player> player = server.getPlayer(name);
         if (player.isPresent()) {
             return CompletableFuture.completedFuture(new VelocitySenderInfo(player.get()));
         }
@@ -236,7 +236,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
 
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final UUID uuid) {
-        final Optional<Player> player = server.getPlayer(uuid);
+        final Optional<? extends Player> player = server.getPlayer(uuid);
         if (player.isPresent()) {
             return CompletableFuture.completedFuture(new VelocitySenderInfo(player.get()));
         }
@@ -250,7 +250,7 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
     @Override
     @Nullable
     public String getServerNameOf(final SenderInfo sender) {
-        final Optional<Player> player = server.getPlayer(sender.uuid());
+        final Optional<? extends Player> player = server.getPlayer(sender.uuid());
         if (player.isEmpty() || player.get().getCurrentServer().isEmpty()) return null;
         return player.get().getCurrentServer().get().getServerInfo().getName();
     }
