@@ -607,13 +607,14 @@ public final class DiscordBot extends ListenerAdapter {
     }
 
     /**
-     * Live role check (DiscordSRV-style): when a linked player is denied at join, verify their CURRENT
-     * Discord roles directly and whitelist them if they qualify. This makes role-based whitelisting robust
-     * against the event-driven path failing — a missed {@link GuildMemberRoleAddEvent} (bot was down, the
-     * Server Members Intent is off, the gateway event never arrived) no longer leaves a role holder stuck.
-     * The member is fetched on demand, so the next reconnect lets them in.
+     * Live, two-way role check (DiscordSRV-style): fetch the linked player's CURRENT Discord roles directly
+     * and bring the whitelist in line with them — add if they hold the role, remove if they don't (and
+     * {@code remove-on-role-loss} is enabled). Run on join so role-based whitelisting does not depend on the
+     * gateway {@link GuildMemberRoleAddEvent}/{@link GuildMemberRoleRemoveEvent} firing at all: a missed
+     * event (bot was down, Server Members Intent off, never delivered) is reconciled the next time the player
+     * connects. Unlinked players cost nothing (a map lookup, no REST call).
      */
-    public void verifyRoleAndWhitelist(final UUID uuid, final String name) {
+    public void syncWhitelistWithRole(final UUID uuid, final String name) {
         if (jda == null || !roleSyncEnabled()) {
             return;
         }
@@ -640,12 +641,23 @@ public final class DiscordBot extends ListenerAdapter {
                     plugin.getLogger().info("Live role check whitelisted " + name
                             + " (holds the whitelist role) - reconnect to join.");
                 }
-            } else {
-                plugin.getLogger().info("Live role check: " + name
-                        + " is linked but does not currently have the whitelist role.");
+            } else if (settings.isDiscordRemoveOnRoleLoss()) {
+                if (settings.removeWhitelistedPlayer(uuid)) {
+                    plugin.getLogger().info("Live role check removed " + name
+                            + " from the whitelist (no longer has the whitelist role).");
+                }
             }
-        }, error -> plugin.getLogger().info("Live role check: could not fetch the Discord member linked to "
-                + name + " (they may have left the server)."));
+        }, error -> {
+            // The member could not be fetched. Only treat a confirmed "not in the server" as a reason to
+            // revoke access; transient API errors must not cause false removals.
+            if (error instanceof ErrorResponseException err
+                    && err.getErrorResponse() == ErrorResponse.UNKNOWN_MEMBER
+                    && settings.isDiscordRemoveOnRoleLoss()
+                    && settings.removeWhitelistedPlayer(uuid)) {
+                plugin.getLogger().info("Live role check removed " + name
+                        + " from the whitelist (no longer in the Discord server).");
+            }
+        });
     }
 
     // --- Code-based linking (DM the bot a code) ---

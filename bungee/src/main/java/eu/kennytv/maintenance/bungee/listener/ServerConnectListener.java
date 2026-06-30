@@ -48,6 +48,8 @@ public final class ServerConnectListener extends ProxyJoinListenerBase implement
         final BungeeSenderInfo player = new BungeeSenderInfo(event.getPlayer());
         // Remember every player that connects (incl. cracked/Bedrock) so they can be whitelisted by name later.
         plugin.cachePlayer(event.getPlayer().getUniqueId(), event.getPlayer().getName());
+        // Live two-way role sync, so role gains/losses take effect even if the gateway event never fired.
+        plugin.syncWhitelistWithRole(player);
         if (plugin.isDebug()) {
             plugin.getLogger().info("Join permission check for " + event.getPlayer().getName()
                     + " - Permission: " + player.hasMaintenancePermission("bypass") + ", whitelist: " + settings.isWhitelisted(player.uuid()));

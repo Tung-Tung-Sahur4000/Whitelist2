@@ -475,6 +475,17 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     }
 
     /**
+     * Brings a joining player's whitelist state in line with their current Discord role via a live check,
+     * so role sync does not rely on gateway role events firing. No-op for unlinked players or when the
+     * Discord bot is disabled. Called on every initial proxy join.
+     */
+    public void syncWhitelistWithRole(final SenderInfo sender) {
+        if (discordBot != null) {
+            discordBot.syncWhitelistWithRole(sender.uuid(), sender.name());
+        }
+    }
+
+    /**
      * Message shown when a non-whitelisted player is denied at join. If code-based linking is enabled, this
      * generates the player's one-time code and tells them to DM it to the bot (DiscordSRV-style); otherwise
      * the normal kick message is used.
@@ -494,9 +505,6 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
         if (settingsProxy.isLinkingEnforced() && discordBot != null) {
             // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
-                // Live fallback: re-check their current Discord role now, so a missed role event can't
-                // leave a role holder permanently stuck. Whitelists them for their reconnect.
-                discordBot.verifyRoleAndWhitelist(sender.uuid(), sender.name());
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
             // null means the active-code pool is at capacity — bot flood in progress.
@@ -521,8 +529,6 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
         if (settingsProxy.isLinkingLimboMode() && discordBot != null) {
             // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
-                // Live fallback: re-check their current Discord role now (see getJoinDenyMessage).
-                discordBot.verifyRoleAndWhitelist(sender.uuid(), sender.name());
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
             // null means the active-code pool is at capacity — bot flood in progress.
