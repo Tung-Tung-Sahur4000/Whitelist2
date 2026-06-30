@@ -89,6 +89,19 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     }
 
     /**
+     * On {@code /… reload}, restart the Discord bot so a changed token, guild-id, role-id, linking mode or
+     * intent requirement takes effect (and role members are reconciled again) without a full server restart.
+     */
+    @Override
+    public void onConfigReload() {
+        if (discordBot != null) {
+            discordBot.shutdown();
+            discordBot = null;
+        }
+        startDiscordBot();
+    }
+
+    /**
      * Starts the built-in Discord bot if it is enabled and a token is configured.
      * The login happens off the main thread.
      */

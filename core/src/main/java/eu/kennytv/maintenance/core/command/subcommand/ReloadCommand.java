@@ -31,6 +31,9 @@ public final class ReloadCommand extends CommandInfo {
     public void execute(final SenderInfo sender, final String[] args) {
         if (checkArgs(sender, args, 1)) return;
         getSettings().reloadConfigs();
+        // Let platforms re-apply anything that isn't just config values (e.g. restart the Discord bot so a
+        // changed token / guild-id / role-id / intents take effect without a full server restart).
+        plugin.onConfigReload();
         sender.send(getMessage("reload"));
     }
 }

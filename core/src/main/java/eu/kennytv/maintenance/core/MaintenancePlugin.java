@@ -498,6 +498,13 @@ public abstract class MaintenancePlugin implements Maintenance {
         return getOfflinePlayer(name).thenApply(profile -> profile == null ? List.of() : List.of(profile));
     }
 
+    /**
+     * Called after {@code /…&nbsp;reload} has reloaded the config files, so platforms can re-apply state that
+     * is not just plain config values. The base implementation does nothing.
+     */
+    public void onConfigReload() {
+    }
+
     public abstract File getDataFolder();
 
     @Nullable
