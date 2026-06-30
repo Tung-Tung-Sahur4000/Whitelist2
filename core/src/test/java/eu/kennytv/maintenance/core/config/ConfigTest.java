@@ -119,8 +119,8 @@ class ConfigTest {
         assertFalse(config.contains("test"));
         assertTrue(config.getComments().containsKey("fallback"));
         assertTrue(config.getComments().containsKey("player-count-message.enable-timer-specific-message"));
-        assertFalse(config.contains("redis.enabled"));
-        assertFalse(config.getSection("redis").contains("enabled"));
+        assertTrue(config.contains("redis.enabled"));
+        assertTrue(config.getSection("redis").contains("enabled"));
 
         config.set("test", "abc");
         config.remove("fallback");

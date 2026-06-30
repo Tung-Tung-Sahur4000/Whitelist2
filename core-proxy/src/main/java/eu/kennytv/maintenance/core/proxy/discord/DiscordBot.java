@@ -184,8 +184,19 @@ public final class DiscordBot extends ListenerAdapter {
                 );
         // /link (name-based) is intentionally absent. Linking by name allows anyone to claim any account
         // without proving ownership. The only supported link path is the in-game code flow: join the
-        // server, receive a code, DM it here. /unlink is kept so players can remove their own links.
-        final SlashCommandData unlinkCommand = Commands.slash("unlink", "Unlink your Discord account from Minecraft");
+        // server, receive a code, DM it here.
+        // /unlink is ADMIN-ONLY by design. If players could unlink themselves, anyone who controls a
+        // Discord account could move the whitelist grant to a different Minecraft account (impersonation /
+        // account takeover). Unlinking is the staff recovery path for a player who lost access to their
+        // Minecraft OR Discord account: unlink by 'discord' (lost Minecraft account) or by 'minecraft'
+        // (lost Discord account), then the player links the new account through the normal code flow.
+        final SlashCommandData unlinkCommand = Commands.slash("unlink", "Admin: unlink an account so a new one can be linked")
+                .addSubcommands(
+                        new SubcommandData("discord", "Unlink the Minecraft account linked to a Discord user")
+                                .addOption(OptionType.USER, "user", "Discord user to unlink", true),
+                        new SubcommandData("minecraft", "Unlink the Discord account linked to a Minecraft player")
+                                .addOption(OptionType.STRING, "player", "Minecraft name or UUID to unlink", true)
+                );
         final SlashCommandData lookupCommand = Commands.slash("lookup", "Admin: look up the account linked to a player or Discord user")
                 .addSubcommands(
                         new SubcommandData("minecraft", "Find which Discord account is linked to a Minecraft player")
@@ -208,6 +219,16 @@ public final class DiscordBot extends ListenerAdapter {
 
         jda.updateCommands().addCommands(whitelistCommand, unlinkCommand, lookupCommand).queue();
         plugin.getLogger().info("Registered global Discord slash commands (may take up to an hour to appear).");
+
+        // With no guild-id set, guild membership cannot be reliably resolved when the bot is in more than
+        // one server (resolveGuild() returns null), so the code-link flow falls back to "an admin still
+        // needs to give you the role" instead of verifying membership/role at link time. Strongly recommend
+        // setting guild-id when linking or role sync is in use.
+        if ((settings.isLinkingEnforced() || roleSyncEnabled()) && jda.getGuilds().size() != 1) {
+            plugin.getLogger().warning("No 'guild-id' is set in config.yml and the bot is in "
+                    + jda.getGuilds().size() + " servers. Set 'discord-bot.guild-id' to your server's ID so "
+                    + "linking and role sync can verify membership reliably and slash commands appear instantly.");
+        }
 
         if (roleSyncEnabled()) {
             for (final Guild guild : jda.getGuilds()) {
@@ -385,21 +406,55 @@ public final class DiscordBot extends ListenerAdapter {
     }
 
     private void handleUnlink(final SlashCommandInteractionEvent event) {
+        // Admin-only: self-service unlinking would let anyone who controls a Discord account move the
+        // whitelist to a different Minecraft account. This is the staff recovery path only.
         final Member member = event.getMember();
         if (member == null) {
             event.reply("This command can only be used in a server.").setEphemeral(true).queue();
             return;
         }
-
-        final ProfileLookup removed = linkManager.unlink(member.getId());
-        if (removed == null) {
-            event.reply("You do not have a linked Minecraft account.").setEphemeral(true).queue();
+        if (!isAdmin(member)) {
+            event.reply("You do not have permission to unlink accounts. Ask a staff member if you lost access to your account.").setEphemeral(true).queue();
             return;
         }
 
-        // A linked account that loses the link should also lose whitelist access gained through it.
+        final String subcommand = event.getSubcommandName();
+        final String discordId;
+        if ("discord".equals(subcommand)) {
+            final OptionMapping option = event.getOption("user");
+            if (option == null) {
+                event.reply("Missing user argument.").setEphemeral(true).queue();
+                return;
+            }
+            discordId = option.getAsUser().getId();
+        } else if ("minecraft".equals(subcommand)) {
+            final OptionMapping option = event.getOption("player");
+            if (option == null) {
+                event.reply("Missing player argument.").setEphemeral(true).queue();
+                return;
+            }
+            final String input = option.getAsString();
+            final UUID uuid = parseUuid(input);
+            discordId = uuid != null ? linkManager.getDiscordId(uuid) : linkManager.getDiscordIdByName(input);
+            if (discordId == null) {
+                event.reply("❌ `" + sanitizeName(input) + "` is not linked to any Discord account.").setEphemeral(true).queue();
+                return;
+            }
+        } else {
+            event.reply("Unknown subcommand.").setEphemeral(true).queue();
+            return;
+        }
+
+        final ProfileLookup removed = linkManager.unlink(discordId);
+        if (removed == null) {
+            event.reply("❌ <@" + discordId + "> does not have a linked Minecraft account.").setEphemeral(true).queue();
+            return;
+        }
+
+        // A link that is removed should also lose any whitelist access it granted.
         settings.removeWhitelistedPlayer(removed.uuid());
-        event.reply("✅ Unlinked your Discord account from `" + removed.name() + "` and removed it from the whitelist.").setEphemeral(true).queue();
+        event.reply("✅ Unlinked `" + sanitizeName(removed.name()) + "` (was linked to <@" + discordId
+                + ">) and removed it from the whitelist. A new account can now be linked.").setEphemeral(true).queue();
     }
 
     private void handleLookup(final SlashCommandInteractionEvent event) {
@@ -481,6 +536,22 @@ public final class DiscordBot extends ListenerAdapter {
         }
     }
 
+    @Override
+    public void onGuildMemberRemove(final GuildMemberRemoveEvent event) {
+        // A member leaving the server should lose whitelist access the same way losing the role does.
+        // Discord does NOT fire a role-remove event when a member leaves, so without this handler a
+        // whitelisted player could simply leave the Discord and keep their whitelist forever.
+        // The link record is kept so that if they rejoin and regain the role they are re-whitelisted.
+        if (!roleSyncEnabled() || !settings.isDiscordRemoveOnRoleLoss()) {
+            return;
+        }
+
+        final ProfileLookup link = linkManager.getLink(event.getUser().getId());
+        if (link != null && settings.removeWhitelistedPlayer(link.uuid())) {
+            plugin.getLogger().info("Removed " + link.name() + " from the whitelist after they left the Discord server.");
+        }
+    }
+
     private void reconcileRoleMembers(final Guild guild) {
         if (!roleSyncEnabled()) {
             return;
@@ -555,7 +626,8 @@ public final class DiscordBot extends ListenerAdapter {
         final ProfileLookup existingLink = linkManager.getLink(discordId);
         if (existingLink != null && !existingLink.uuid().equals(peeked.uuid())) {
             reply(event, "❌ Your Discord account is already linked to `" + sanitizeName(existingLink.name())
-                    + "`. Use `/unlink` first if you want to switch to a different Minecraft account.");
+                    + "`. If you lost access to that account, ask a staff member to unlink it for you - "
+                    + "you cannot switch accounts yourself.");
             return;
         }
 
@@ -580,7 +652,7 @@ public final class DiscordBot extends ListenerAdapter {
                 return;
             }
             case ALREADY_LINKED_TO_OTHER_ACCOUNT -> {
-                reply(event, "❌ Your Discord account was just linked to a different Minecraft account. Use `/unlink` first to switch accounts.");
+                reply(event, "❌ Your Discord account is already linked to a different Minecraft account. Ask a staff member to unlink it if you lost access - you cannot switch accounts yourself.");
                 return;
             }
             case LINKED -> {
