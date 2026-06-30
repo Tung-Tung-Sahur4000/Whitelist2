@@ -299,6 +299,15 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
             return GeyserApiUtil.lookupBedrockProfile(gamertag, name);
         }
 
+        // On an offline-mode (cracked) proxy, players are assigned offline UUIDs derived from their name,
+        // not their Mojang UUID. Looking the name up against Mojang would return the PREMIUM UUID, which
+        // never matches how the player actually joins, so they would stay blocked despite being "added".
+        // Resolve directly to the offline UUID the player will join with instead. (Already-joined players
+        // are served from the username cache above, which records their real session UUID either way.)
+        if (!isOnlineMode()) {
+            return new ProfileLookup(offlineUUID(name), name);
+        }
+
         ProfileLookup profileLookup = null;
         if (USERNAME_PATTERN.matcher(name).matches()) {
             try {
@@ -311,10 +320,14 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
         if (profileLookup == null && settingsProxy.isFallbackToOfflineUUID()) {
             // Use offline uuid
-            return new ProfileLookup(UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)), name);
+            return new ProfileLookup(offlineUUID(name), name);
         }
 
         return profileLookup;
+    }
+
+    private static UUID offlineUUID(final String name) {
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -468,4 +481,10 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     protected abstract void kickPlayersTo(Server server);
 
     protected abstract void kickPlayersFromProxy();
+
+    /**
+     * @return {@code true} if the proxy itself is running in online mode (authenticated Mojang UUIDs),
+     *         {@code false} if it is in offline/cracked mode (offline UUIDs derived from the username)
+     */
+    public abstract boolean isOnlineMode();
 }
