@@ -34,6 +34,13 @@ public final class DiscordWebhook {
         embeds.add(embed);
         jsonObject.add("embeds", embeds);
 
+        // Never let webhook content ping anyone. Messages can include untrusted player names (e.g. the
+        // blocked_join event on offline/cracked servers, where a player picks any username), so an empty
+        // allowed_mentions parse list ensures a crafted name can never trigger @everyone/@here/role pings.
+        final JsonObject allowedMentions = new JsonObject();
+        allowedMentions.add("parse", new JsonArray());
+        jsonObject.add("allowed_mentions", allowedMentions);
+
         try (final HttpClient client = HttpClient.newHttpClient()) {
             final HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(settings.getWebhookUrl()))

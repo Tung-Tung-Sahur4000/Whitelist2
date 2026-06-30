@@ -127,8 +127,10 @@ public final class LinkCodeManager {
             }
         }
         if (code == null) {
-            // Should be unreachable in practice; generate an oversized emergency code and insert directly.
-            code = randomDigits(length + 4);
+            // Should be unreachable in practice (would require 10 000 consecutive collisions). Insert
+            // directly with a code of the configured length so it still matches the DM handler's
+            // exactly-'length'-digits check — an oversized emergency code could never be submitted.
+            code = randomDigits(length);
             codes.put(code, new PendingLink(uuid, name, expiresAt));
         }
 
