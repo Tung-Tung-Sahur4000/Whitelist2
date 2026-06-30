@@ -576,8 +576,16 @@ public final class DiscordBot extends ListenerAdapter {
         }
         final Role role = guild.getRoleById(settings.getDiscordAutoWhitelistRoleId());
         if (role == null) {
+            // The configured role id does not exist in this guild - the single most common reason role sync
+            // "does nothing". Without this warning it failed completely silently. Surface it loudly.
+            plugin.getLogger().warning("auto-whitelist-role-id '" + settings.getDiscordAutoWhitelistRoleId()
+                    + "' was not found in Discord server '" + guild.getName() + "'. Role sync cannot whitelist "
+                    + "anyone until this is a valid role id FROM THAT SERVER. (Discord: Settings -> Advanced -> "
+                    + "Developer Mode on, then right-click the role -> Copy Role ID.)");
             return;
         }
+        plugin.getLogger().info("Role sync active: whitelisting members with the '" + role.getName()
+                + "' role (" + role.getId() + ") in '" + guild.getName() + "'.");
 
         guild.loadMembers().onSuccess(members -> {
             for (final Member member : members) {
