@@ -485,6 +485,19 @@ public abstract class MaintenancePlugin implements Maintenance {
 
     public abstract CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(UUID uuid);
 
+    /**
+     * Resolves every account a player with this name could connect as, so a name can be whitelisted
+     * for BOTH its premium (online) and cracked (offline) variants at once. The base implementation
+     * returns just the single {@link #getOfflinePlayer(String)} result; proxy platforms override this
+     * to also include the offline/premium counterpart on offline-mode or mixed servers.
+     *
+     * @param name name of the player
+     * @return the list of resolved profiles (possibly empty if the name could not be resolved)
+     */
+    public CompletableFuture<List<SenderInfo>> getOfflinePlayers(final String name) {
+        return getOfflinePlayer(name).thenApply(profile -> profile == null ? List.of() : List.of(profile));
+    }
+
     public abstract File getDataFolder();
 
     @Nullable

@@ -286,22 +286,40 @@ public final class DiscordBot extends ListenerAdapter {
         final String input = option.getAsString();
         // Ephemeral: the staff member's command and typed input stay private to them.
         event.deferReply(true).queue();
-        lookup(input).whenComplete((selected, ex) -> {
-            if (ex != null || selected == null) {
-                event.getHook().sendMessage("❌ Could not find a player named `" + input + "`.").queue();
-                return;
-            }
+        // A UUID resolves to exactly one account; a name resolves to every account it could connect as
+        // (premium and/or cracked) so the player is whitelisted however they log in.
+        final UUID uuid = parseUuid(input);
+        if (uuid != null) {
+            plugin.getOfflinePlayer(uuid).whenComplete((selected, ex) ->
+                    finishAdd(event, input, ex, selected == null ? List.of() : List.of(selected)));
+        } else {
+            plugin.getOfflinePlayers(input).whenComplete((profiles, ex) -> finishAdd(event, input, ex, profiles));
+        }
+    }
 
-            final boolean added = settings.addWhitelistedPlayer(selected.uuid(), selected.name());
-            if (added) {
-                // Quiet confirmation only the staff member sees...
-                event.getHook().sendMessage("✅ Added `" + selected.name() + "` to the whitelist.").queue();
-                // ...and a clean public embed so it looks automatic - no visible command, just the result.
-                event.getChannel().sendMessageEmbeds(whitelistedEmbed(selected.name())).queue();
-            } else {
-                event.getHook().sendMessage("ℹ️ `" + selected.name() + "` is already whitelisted.").queue();
+    private void finishAdd(final SlashCommandInteractionEvent event, final String input,
+                           @Nullable final Throwable ex, @Nullable final List<SenderInfo> profiles) {
+        if (ex != null || profiles == null || profiles.isEmpty()) {
+            event.getHook().sendMessage("❌ Could not find a player named `" + input + "`.").queue();
+            return;
+        }
+
+        boolean added = false;
+        final String displayName = profiles.get(0).name();
+        for (final SenderInfo selected : profiles) {
+            if (settings.addWhitelistedPlayer(selected.uuid(), selected.name())) {
+                added = true;
             }
-        });
+        }
+
+        if (added) {
+            // Quiet confirmation only the staff member sees...
+            event.getHook().sendMessage("✅ Added `" + displayName + "` to the whitelist.").queue();
+            // ...and a clean public embed so it looks automatic - no visible command, just the result.
+            event.getChannel().sendMessageEmbeds(whitelistedEmbed(displayName)).queue();
+        } else {
+            event.getHook().sendMessage("ℹ️ `" + displayName + "` is already whitelisted.").queue();
+        }
     }
 
     private void handleRemove(final SlashCommandInteractionEvent event) {

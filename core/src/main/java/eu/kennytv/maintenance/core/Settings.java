@@ -544,19 +544,22 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
 
     @Override
     public boolean removeWhitelistedPlayer(final String name) {
-        UUID uuid = null;
+        // A name can have more than one whitelist entry (its premium and cracked UUID variants), so remove
+        // every entry matching the name - otherwise the player could still join as the other variant.
+        final List<UUID> toRemove = new ArrayList<>();
         for (final Map.Entry<UUID, String> e : whitelistedPlayers.entrySet()) {
             if (e.getValue().equalsIgnoreCase(name)) {
-                uuid = e.getKey();
-                break;
+                toRemove.add(e.getKey());
             }
         }
 
-        if (uuid == null) {
-            return false;
+        boolean removed = false;
+        for (final UUID uuid : toRemove) {
+            if (removeWhitelistedPlayer(uuid)) {
+                removed = true;
+            }
         }
-
-        return removeWhitelistedPlayer(uuid);
+        return removed;
     }
 
     @Override

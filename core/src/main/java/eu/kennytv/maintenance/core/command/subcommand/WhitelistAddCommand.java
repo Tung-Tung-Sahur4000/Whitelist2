@@ -65,19 +65,29 @@ public final class WhitelistAddCommand extends CommandInfo {
     }
 
     private void addPlayerToWhitelist(final SenderInfo sender, final String name) {
-        plugin.getOfflinePlayer(name).whenComplete((selected, ex) -> {
+        // Resolve every account this name could connect as (premium and/or cracked) and whitelist all of
+        // them, so the player matches whether they log in with their Mojang UUID or an offline UUID.
+        plugin.getOfflinePlayers(name).whenComplete((profiles, ex) -> {
             if (ex != null) {
                 plugin.getLogger().log(Level.SEVERE, "Error while fetching offline player", ex);
                 sender.send(getMessage("offlinePlayerFetchError"));
                 return;
             }
 
-            if (selected == null) {
+            if (profiles == null || profiles.isEmpty()) {
                 sender.send(getMessage("playerNotOnline"));
                 return;
             }
 
-            addPlayerToWhitelist(sender, selected);
+            boolean added = false;
+            String displayName = name;
+            for (final SenderInfo selected : profiles) {
+                displayName = selected.name();
+                if (getSettings().addWhitelistedPlayer(selected.uuid(), selected.name())) {
+                    added = true;
+                }
+            }
+            sender.send(getMessage(added ? "whitelistAdded" : "whitelistAlreadyAdded", "%PLAYER%", displayName));
         });
     }
 
