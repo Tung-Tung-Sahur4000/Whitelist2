@@ -606,6 +606,48 @@ public final class DiscordBot extends ListenerAdapter {
                         + " for role sync. Make sure the 'Server Members Intent' is enabled for the bot."));
     }
 
+    /**
+     * Live role check (DiscordSRV-style): when a linked player is denied at join, verify their CURRENT
+     * Discord roles directly and whitelist them if they qualify. This makes role-based whitelisting robust
+     * against the event-driven path failing — a missed {@link GuildMemberRoleAddEvent} (bot was down, the
+     * Server Members Intent is off, the gateway event never arrived) no longer leaves a role holder stuck.
+     * The member is fetched on demand, so the next reconnect lets them in.
+     */
+    public void verifyRoleAndWhitelist(final UUID uuid, final String name) {
+        if (jda == null || !roleSyncEnabled()) {
+            return;
+        }
+        // The link may be stored under the player's other UUID variant (premium vs cracked), so fall back
+        // to a name lookup as well.
+        String discordId = linkManager.getDiscordId(uuid);
+        if (discordId == null) {
+            discordId = linkManager.getDiscordIdByName(name);
+        }
+        if (discordId == null) {
+            return; // not linked - the normal code flow handles them
+        }
+
+        final Guild guild = resolveGuild();
+        if (guild == null) {
+            plugin.getLogger().warning("Cannot run live role check for " + name
+                    + ": no guild could be resolved. Set 'discord-bot.guild-id' in config.yml.");
+            return;
+        }
+
+        guild.retrieveMemberById(discordId).queue(member -> {
+            if (hasAutoRole(member)) {
+                if (settings.addWhitelistedPlayer(uuid, name)) {
+                    plugin.getLogger().info("Live role check whitelisted " + name
+                            + " (holds the whitelist role) - reconnect to join.");
+                }
+            } else {
+                plugin.getLogger().info("Live role check: " + name
+                        + " is linked but does not currently have the whitelist role.");
+            }
+        }, error -> plugin.getLogger().info("Live role check: could not fetch the Discord member linked to "
+                + name + " (they may have left the server)."));
+    }
+
     // --- Code-based linking (DM the bot a code) ---
 
     @Override
@@ -755,7 +797,20 @@ public final class DiscordBot extends ListenerAdapter {
             return jda.getGuildById(guildId);
         }
         final List<Guild> guilds = jda.getGuilds();
-        return guilds.size() == 1 ? guilds.get(0) : null;
+        if (guilds.size() == 1) {
+            return guilds.get(0);
+        }
+        // No guild-id set and the bot is in several servers: fall back to the one that actually contains
+        // the configured auto-whitelist role, so role sync still works without an explicit guild-id.
+        if (roleSyncEnabled()) {
+            final String roleId = settings.getDiscordAutoWhitelistRoleId();
+            for (final Guild guild : guilds) {
+                if (guild.getRoleById(roleId) != null) {
+                    return guild;
+                }
+            }
+        }
+        return null;
     }
 
     private String sanitizeName(final String name) {
