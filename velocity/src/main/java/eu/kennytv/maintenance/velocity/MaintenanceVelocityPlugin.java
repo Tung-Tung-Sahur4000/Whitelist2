@@ -293,6 +293,11 @@ public final class MaintenanceVelocityPlugin extends MaintenanceProxyPlugin {
     }
 
     @Override
+    public boolean isOnlineMode() {
+        return server.getConfiguration().isOnlineMode();
+    }
+
+    @Override
     public Logger getLogger() {
         return logger;
     }

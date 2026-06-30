@@ -286,22 +286,40 @@ public final class DiscordBot extends ListenerAdapter {
         final String input = option.getAsString();
         // Ephemeral: the staff member's command and typed input stay private to them.
         event.deferReply(true).queue();
-        lookup(input).whenComplete((selected, ex) -> {
-            if (ex != null || selected == null) {
-                event.getHook().sendMessage("❌ Could not find a player named `" + input + "`.").queue();
-                return;
-            }
+        // A UUID resolves to exactly one account; a name resolves to every account it could connect as
+        // (premium and/or cracked) so the player is whitelisted however they log in.
+        final UUID uuid = parseUuid(input);
+        if (uuid != null) {
+            plugin.getOfflinePlayer(uuid).whenComplete((selected, ex) ->
+                    finishAdd(event, input, ex, selected == null ? List.of() : List.of(selected)));
+        } else {
+            plugin.getOfflinePlayers(input).whenComplete((profiles, ex) -> finishAdd(event, input, ex, profiles));
+        }
+    }
 
-            final boolean added = settings.addWhitelistedPlayer(selected.uuid(), selected.name());
-            if (added) {
-                // Quiet confirmation only the staff member sees...
-                event.getHook().sendMessage("✅ Added `" + selected.name() + "` to the whitelist.").queue();
-                // ...and a clean public embed so it looks automatic - no visible command, just the result.
-                event.getChannel().sendMessageEmbeds(whitelistedEmbed(selected.name())).queue();
-            } else {
-                event.getHook().sendMessage("ℹ️ `" + selected.name() + "` is already whitelisted.").queue();
+    private void finishAdd(final SlashCommandInteractionEvent event, final String input,
+                           @Nullable final Throwable ex, @Nullable final List<SenderInfo> profiles) {
+        if (ex != null || profiles == null || profiles.isEmpty()) {
+            event.getHook().sendMessage("❌ Could not find a player named `" + input + "`.").queue();
+            return;
+        }
+
+        boolean added = false;
+        final String displayName = profiles.get(0).name();
+        for (final SenderInfo selected : profiles) {
+            if (settings.addWhitelistedPlayer(selected.uuid(), selected.name())) {
+                added = true;
             }
-        });
+        }
+
+        if (added) {
+            // Quiet confirmation only the staff member sees...
+            event.getHook().sendMessage("✅ Added `" + displayName + "` to the whitelist.").queue();
+            // ...and a clean public embed so it looks automatic - no visible command, just the result.
+            event.getChannel().sendMessageEmbeds(whitelistedEmbed(displayName)).queue();
+        } else {
+            event.getHook().sendMessage("ℹ️ `" + displayName + "` is already whitelisted.").queue();
+        }
     }
 
     private void handleRemove(final SlashCommandInteractionEvent event) {
@@ -699,10 +717,19 @@ public final class DiscordBot extends ListenerAdapter {
             return;
         }
 
-        // No guild configured: fall back to role-only check or immediate whitelist.
+        // No guild could be resolved (no guild-id set, and the bot is in zero or several guilds), so we
+        // CANNOT verify that this Discord user is actually a member of your server.
         if (!settings.isLinkingRequireRole() || !roleSyncEnabled()) {
-            settings.addWhitelistedPlayer(pending.uuid(), pending.name());
-            reply(event, "✅ Linked and whitelisted `" + safeName + "` - you can join now!");
+            // Without a membership check and without a required role, whitelisting here would let ANY
+            // Discord user who shares a server with the bot whitelist an account just by DMing a valid
+            // code. Refuse and tell the owner to configure guild-id instead of granting access blindly.
+            // (Role-based whitelisting does not need this branch: role add / reconcile events carry
+            // their own guild context, so they still verify membership implicitly.)
+            reply(event, "✅ Linked `" + safeName + "`, but you could not be whitelisted automatically because "
+                    + "the Discord server is not fully configured. Please contact an admin.");
+            plugin.getLogger().warning("Linked " + pending.name() + " but refused to auto-whitelist: no guild could "
+                    + "be resolved, so server membership cannot be verified. Set 'discord-bot.guild-id' in config.yml "
+                    + "(required for linking to whitelist safely when 'require-role' is off).");
         } else {
             reply(event, "✅ Linked `" + safeName + "`. An admin still needs to give you the whitelist role.");
         }

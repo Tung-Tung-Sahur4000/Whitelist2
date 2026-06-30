@@ -246,6 +246,11 @@ public final class MaintenanceBungeePlugin extends MaintenanceProxyPlugin {
     }
 
     @Override
+    public boolean isOnlineMode() {
+        return getProxy().getConfig().isOnlineMode();
+    }
+
+    @Override
     public InputStream getResource(final String name) {
         return plugin.getResourceAsStream(name);
     }

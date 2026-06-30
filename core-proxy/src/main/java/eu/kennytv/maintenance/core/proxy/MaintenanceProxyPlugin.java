@@ -33,6 +33,7 @@ import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
 import eu.kennytv.maintenance.core.runnable.MaintenanceRunnableBase;
 import eu.kennytv.maintenance.core.util.DiscordWebhook;
 import eu.kennytv.maintenance.core.util.RateLimitedException;
+import eu.kennytv.maintenance.core.util.DummySenderInfo;
 import eu.kennytv.maintenance.core.util.SenderInfo;
 import eu.kennytv.maintenance.core.util.ServerType;
 import java.io.IOException;
@@ -46,10 +47,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
@@ -299,6 +302,15 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
             return GeyserApiUtil.lookupBedrockProfile(gamertag, name);
         }
 
+        // On an offline-mode (cracked) proxy, players are assigned offline UUIDs derived from their name,
+        // not their Mojang UUID. Looking the name up against Mojang would return the PREMIUM UUID, which
+        // never matches how the player actually joins, so they would stay blocked despite being "added".
+        // Resolve directly to the offline UUID the player will join with instead. (Already-joined players
+        // are served from the username cache above, which records their real session UUID either way.)
+        if (!isOnlineMode()) {
+            return new ProfileLookup(offlineUUID(name), name);
+        }
+
         ProfileLookup profileLookup = null;
         if (USERNAME_PATTERN.matcher(name).matches()) {
             try {
@@ -311,10 +323,68 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
         if (profileLookup == null && settingsProxy.isFallbackToOfflineUUID()) {
             // Use offline uuid
-            return new ProfileLookup(UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8)), name);
+            return new ProfileLookup(offlineUUID(name), name);
         }
 
         return profileLookup;
+    }
+
+    private static UUID offlineUUID(final String name) {
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Resolves both the premium (online) and cracked (offline) account a name could connect as, so a
+     * single {@code /whitelist add <name>} whitelists the player no matter which way they log in.
+     *
+     * <p>This matters on offline-mode and mixed servers (e.g. LimboAuth with premium auto-login): the
+     * exact same username can arrive with its Mojang UUID (premium) or with an offline UUID derived from
+     * the name (cracked). Whitelisting only one of them leaves the player blocked when they connect as
+     * the other. Bedrock gamertags have no such duality and resolve to a single Floodgate UUID.
+     */
+    @Override
+    public CompletableFuture<List<SenderInfo>> getOfflinePlayers(final String name) {
+        return CompletableFuture.supplyAsync(() -> {
+            final List<SenderInfo> profiles = new ArrayList<>();
+            final Set<UUID> seen = new HashSet<>();
+            try {
+                // Primary resolution: cache (real joined UUID) -> Bedrock -> mode-appropriate UUID.
+                final ProfileLookup primary = doUUIDLookup(name);
+                if (primary != null) {
+                    addProfile(profiles, seen, primary);
+                }
+
+                // Bedrock gamertags map to exactly one Floodgate UUID - no premium/offline variants.
+                final String bedrockPrefix = settingsProxy.getBedrockPrefix();
+                final boolean bedrock = settingsProxy.isBedrockSupport()
+                        && !bedrockPrefix.isEmpty() && name.startsWith(bedrockPrefix);
+                if (!bedrock && USERNAME_PATTERN.matcher(name).matches()) {
+                    // Premium variant: relevant on online servers and on mixed servers allowing premium logins.
+                    ProfileLookup premium = null;
+                    try {
+                        premium = doUUIDLookupMojangAPI(name);
+                    } catch (final RateLimitedException e) {
+                        premium = doUUIDLookupAshconAPI(name);
+                    }
+                    if (premium != null) {
+                        addProfile(profiles, seen, premium);
+                    }
+                    // Cracked variant: only possible when the proxy itself runs in offline mode.
+                    if (!isOnlineMode()) {
+                        addProfile(profiles, seen, new ProfileLookup(offlineUUID(name), name));
+                    }
+                }
+            } catch (final IOException e) {
+                getLogger().log(Level.WARNING, "Could not fully resolve profiles for " + name, e);
+            }
+            return profiles;
+        });
+    }
+
+    private static void addProfile(final List<SenderInfo> profiles, final Set<UUID> seen, final ProfileLookup profile) {
+        if (seen.add(profile.uuid())) {
+            profiles.add(new DummySenderInfo(profile.uuid(), profile.name()));
+        }
     }
 
     /**
@@ -468,4 +538,10 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     protected abstract void kickPlayersTo(Server server);
 
     protected abstract void kickPlayersFromProxy();
+
+    /**
+     * @return {@code true} if the proxy itself is running in online mode (authenticated Mojang UUIDs),
+     *         {@code false} if it is in offline/cracked mode (offline UUIDs derived from the username)
+     */
+    public abstract boolean isOnlineMode();
 }
