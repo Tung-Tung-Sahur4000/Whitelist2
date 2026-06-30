@@ -92,7 +92,10 @@ public final class RedisHandler {
 
     public void loadPlayers(final Map<UUID, String> players) {
         for (final Map.Entry<String, String> entry : client.hgetAll(REDIS_WHITELIST_KEY).entrySet()) {
-            players.put(UUID.fromString(entry.getKey()), entry.getValue());
+            final UUID uuid = parseUuid(entry.getKey());
+            if (uuid != null) {
+                players.put(uuid, entry.getValue());
+            }
         }
     }
 
@@ -237,11 +240,35 @@ public final class RedisHandler {
     }
 
     private void handlePlayerAdd(final String uuid, final String name) {
-        settings.addWhitelistedPlayerDirect(UUID.fromString(uuid), name);
+        final UUID parsed = parseUuid(uuid);
+        if (parsed != null) {
+            settings.addWhitelistedPlayerDirect(parsed, name);
+        }
     }
 
     private void handlePlayerRemove(final String value) {
-        settings.removeWhitelistedPlayerDirect(UUID.fromString(value));
+        final UUID parsed = parseUuid(value);
+        if (parsed != null) {
+            settings.removeWhitelistedPlayerDirect(parsed);
+        }
+    }
+
+    /**
+     * Parses a UUID from a Redis value, returning {@code null} (and logging a warning) instead of throwing
+     * if the value is malformed. A single corrupt entry must not break whitelist loading or kill the
+     * stream-listener thread.
+     */
+    @Nullable
+    private UUID parseUuid(@Nullable final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (final IllegalArgumentException e) {
+            plugin.getLogger().warning("Ignoring malformed UUID from Redis: " + value);
+            return null;
+        }
     }
 
     public void close() {

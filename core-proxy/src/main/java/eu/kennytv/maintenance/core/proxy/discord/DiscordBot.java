@@ -699,10 +699,19 @@ public final class DiscordBot extends ListenerAdapter {
             return;
         }
 
-        // No guild configured: fall back to role-only check or immediate whitelist.
+        // No guild could be resolved (no guild-id set, and the bot is in zero or several guilds), so we
+        // CANNOT verify that this Discord user is actually a member of your server.
         if (!settings.isLinkingRequireRole() || !roleSyncEnabled()) {
-            settings.addWhitelistedPlayer(pending.uuid(), pending.name());
-            reply(event, "✅ Linked and whitelisted `" + safeName + "` - you can join now!");
+            // Without a membership check and without a required role, whitelisting here would let ANY
+            // Discord user who shares a server with the bot whitelist an account just by DMing a valid
+            // code. Refuse and tell the owner to configure guild-id instead of granting access blindly.
+            // (Role-based whitelisting does not need this branch: role add / reconcile events carry
+            // their own guild context, so they still verify membership implicitly.)
+            reply(event, "✅ Linked `" + safeName + "`, but you could not be whitelisted automatically because "
+                    + "the Discord server is not fully configured. Please contact an admin.");
+            plugin.getLogger().warning("Linked " + pending.name() + " but refused to auto-whitelist: no guild could "
+                    + "be resolved, so server membership cannot be verified. Set 'discord-bot.guild-id' in config.yml "
+                    + "(required for linking to whitelist safely when 'require-role' is off).");
         } else {
             reply(event, "✅ Linked `" + safeName + "`. An admin still needs to give you the whitelist role.");
         }
