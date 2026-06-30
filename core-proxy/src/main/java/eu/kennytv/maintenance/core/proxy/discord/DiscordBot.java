@@ -39,6 +39,7 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleAddEvent;
@@ -223,6 +224,7 @@ public final class DiscordBot extends ListenerAdapter {
             case "whitelist" -> handleWhitelistCommand(event);
             case "link" -> handleLink(event);
             case "unlink" -> handleUnlink(event);
+            case "lookup" -> handleLookup(event);
             default -> {
             }
         }
@@ -400,6 +402,52 @@ public final class DiscordBot extends ListenerAdapter {
         event.reply("✅ Unlinked your Discord account from `" + removed.name() + "` and removed it from the whitelist.").setEphemeral(true).queue();
     }
 
+    private void handleLookup(final SlashCommandInteractionEvent event) {
+        final Member member = event.getMember();
+        if (member == null) {
+            event.reply("This command can only be used in a server.").setEphemeral(true).queue();
+            return;
+        }
+        if (!isAdmin(member)) {
+            event.reply("You do not have permission to look up links.").setEphemeral(true).queue();
+            return;
+        }
+
+        final String subcommand = event.getSubcommandName();
+        if ("minecraft".equals(subcommand)) {
+            final OptionMapping option = event.getOption("player");
+            if (option == null) {
+                event.reply("Missing player argument.").setEphemeral(true).queue();
+                return;
+            }
+            final String input = option.getAsString();
+            final UUID uuid = parseUuid(input);
+            final String discordId = uuid != null ? linkManager.getDiscordId(uuid) : linkManager.getDiscordIdByName(input);
+            if (discordId == null) {
+                event.reply("❌ `" + sanitizeName(input) + "` is not linked to any Discord account.").setEphemeral(true).queue();
+                return;
+            }
+            event.reply("🔗 `" + sanitizeName(input) + "` is linked to <@" + discordId + "> (`" + discordId + "`).")
+                    .setEphemeral(true).queue();
+        } else if ("discord".equals(subcommand)) {
+            final OptionMapping option = event.getOption("user");
+            if (option == null) {
+                event.reply("Missing user argument.").setEphemeral(true).queue();
+                return;
+            }
+            final User user = option.getAsUser();
+            final ProfileLookup link = linkManager.getLink(user.getId());
+            if (link == null) {
+                event.reply("❌ <@" + user.getId() + "> is not linked to any Minecraft account.").setEphemeral(true).queue();
+                return;
+            }
+            event.reply("🔗 <@" + user.getId() + "> is linked to `" + sanitizeName(link.name()) + "` (`" + link.uuid() + "`).")
+                    .setEphemeral(true).queue();
+        } else {
+            event.reply("Unknown subcommand.").setEphemeral(true).queue();
+        }
+    }
+
     // --- Role sync ---
 
     @Override
@@ -409,7 +457,14 @@ public final class DiscordBot extends ListenerAdapter {
         }
 
         final ProfileLookup link = linkManager.getLink(event.getMember().getId());
-        if (link != null && settings.addWhitelistedPlayer(link.uuid(), link.name())) {
+        if (link == null) {
+            // Common admin confusion: the member was given the role but never linked a Minecraft account,
+            // so there is nothing to whitelist. Log it so this is diagnosable instead of silently doing nothing.
+            plugin.getLogger().info("Discord user " + event.getMember().getId()
+                    + " received the whitelist role but has not linked a Minecraft account yet; nothing to whitelist.");
+            return;
+        }
+        if (settings.addWhitelistedPlayer(link.uuid(), link.name())) {
             plugin.getLogger().info("Auto-whitelisted " + link.name() + " after they received the whitelist role.");
         }
     }
@@ -492,6 +547,18 @@ public final class DiscordBot extends ListenerAdapter {
             return;
         }
 
+        // ...and one Discord user can only be linked to one Minecraft account. Without this, a single
+        // Discord user could DM a code for account A, then later DM a code for account B: the link record
+        // would be silently overwritten while account A stayed on the whitelist, letting one Discord
+        // account whitelist multiple Minecraft accounts. Peek-check here (no code burned) so re-DMing the
+        // SAME account's code is still a harmless no-op; the authoritative, atomic check is linkExclusive.
+        final ProfileLookup existingLink = linkManager.getLink(discordId);
+        if (existingLink != null && !existingLink.uuid().equals(peeked.uuid())) {
+            reply(event, "❌ Your Discord account is already linked to `" + sanitizeName(existingLink.name())
+                    + "`. Use `/unlink` first if you want to switch to a different Minecraft account.");
+            return;
+        }
+
         // All pre-checks passed — now atomically consume the code.
         final LinkCodeManager.PendingLink pending = linkCodeManager.verifyAndConsume(content);
         if (pending == null) {
@@ -502,14 +569,23 @@ public final class DiscordBot extends ListenerAdapter {
         }
         linkCodeManager.clearAttempts(discordId);
 
-        // Link atomically — linkIfFree re-checks isLinkedToOther under the same lock as the write.
-        // This closes a TOCTOU window: two Discord users DMing the same code at the exact same instant
-        // could both pass the isLinkedToOther peek above before either recorded a link, causing the
-        // second link() to silently overwrite the first. linkIfFree() collapses the check and write
-        // into one synchronized operation so only one caller ever wins.
-        if (!linkManager.linkIfFree(discordId, pending.uuid(), pending.name())) {
-            reply(event, "❌ That Minecraft account was just linked to another Discord account. Contact a staff member if this was not you.");
-            return;
+        // Link atomically — linkExclusive re-checks BOTH directions (this Minecraft account not taken by
+        // another Discord user, AND this Discord user not already linked to a different account) under the
+        // same lock as the write. This closes the TOCTOU windows where two requests racing between the
+        // peeks above and the write could otherwise silently overwrite an existing link.
+        final DiscordLinkManager.LinkResult result = linkManager.linkExclusive(discordId, pending.uuid(), pending.name());
+        switch (result) {
+            case ACCOUNT_TAKEN -> {
+                reply(event, "❌ That Minecraft account was just linked to another Discord account. Contact a staff member if this was not you.");
+                return;
+            }
+            case ALREADY_LINKED_TO_OTHER_ACCOUNT -> {
+                reply(event, "❌ Your Discord account was just linked to a different Minecraft account. Use `/unlink` first to switch accounts.");
+                return;
+            }
+            case LINKED -> {
+                // proceed
+            }
         }
         finishCodeLink(event, discordId, pending);
     }

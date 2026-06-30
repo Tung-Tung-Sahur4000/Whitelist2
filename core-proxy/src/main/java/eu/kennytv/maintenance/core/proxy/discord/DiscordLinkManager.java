@@ -161,6 +161,17 @@ public final class DiscordLinkManager {
     }
 
     /**
+     * Looks up the Discord user ID linked to a Minecraft player name (case-insensitive).
+     * Used by the {@code /lookup minecraft} admin command when the input is a name rather than a UUID.
+     *
+     * @return the Discord user ID, or {@code null} if that name is not linked
+     */
+    @Nullable
+    public synchronized String getDiscordIdByName(final String name) {
+        return discordIdByLowercaseName.get(name.toLowerCase(Locale.ROOT));
+    }
+
+    /**
      * @return true if the given Minecraft UUID is already linked to a different Discord user
      */
     public synchronized boolean isLinkedToOther(final UUID uuid, final String discordId) {
@@ -169,24 +180,43 @@ public final class DiscordLinkManager {
     }
 
     /**
-     * Atomically checks whether the given Minecraft UUID is free (not linked to any other Discord
-     * user) and, if so, links it to {@code discordId}.
-     *
-     * <p>This is the correct way to create a link from the code-verification flow. Using a separate
-     * {@link #isLinkedToOther} call followed by {@link #link} is a TOCTOU race: two Discord users
-     * sending the same code simultaneously can both pass the check before either records the link,
-     * causing the second write to silently overwrite the first and leave the data inconsistent.
-     * This method eliminates that window by holding the lock across both operations.
-     *
-     * @return {@code true} if the link was created; {@code false} if the UUID was already claimed
-     *         by a different Discord user (caller should reject and not whitelist)
+     * Outcome of an exclusive link attempt via {@link #linkExclusive(String, UUID, String)}.
      */
-    public synchronized boolean linkIfFree(final String discordId, final UUID uuid, final String name) {
+    public enum LinkResult {
+        /** The link was created (or re-affirmed for the same account). */
+        LINKED,
+        /** This Discord user is already linked to a <i>different</i> Minecraft account. */
+        ALREADY_LINKED_TO_OTHER_ACCOUNT,
+        /** This Minecraft account is already linked to a <i>different</i> Discord user. */
+        ACCOUNT_TAKEN
+    }
+
+    /**
+     * Atomically enforces the <b>one Discord user ⇄ one Minecraft account</b> invariant and, if it holds,
+     * creates the link.
+     *
+     * <p>Unlike {@link #link(String, UUID, String)} (which silently overwrites whatever the Discord user
+     * was previously linked to), this method <b>refuses</b> to re-link a Discord user that is already bound
+     * to a different Minecraft account. That overwrite was the root cause of a single Discord user being
+     * able to link — and, through role sync, whitelist — multiple Minecraft accounts: the link record was
+     * replaced while the previously linked account stayed on the whitelist.
+     *
+     * <p>Both directions are checked and the write performed under a single lock, so there is no TOCTOU
+     * window between the checks and the link. Re-sending a code for the <i>same</i> account already linked
+     * to this user is treated as a harmless no-op and returns {@link LinkResult#LINKED}.
+     *
+     * @return the {@link LinkResult}; callers must only proceed to whitelist on {@link LinkResult#LINKED}
+     */
+    public synchronized LinkResult linkExclusive(final String discordId, final UUID uuid, final String name) {
+        final ProfileLookup existing = linksByDiscordId.get(discordId);
+        if (existing != null && !existing.uuid().equals(uuid)) {
+            return LinkResult.ALREADY_LINKED_TO_OTHER_ACCOUNT;
+        }
         if (isLinkedToOther(uuid, discordId)) {
-            return false;
+            return LinkResult.ACCOUNT_TAKEN;
         }
         link(discordId, uuid, name);
-        return true;
+        return LinkResult.LINKED;
     }
 
     public synchronized void link(final String discordId, final UUID uuid, final String name) {
