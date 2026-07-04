@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package eu.kennytv.maintenance.core.proxy.util;
+package eu.kennytv.maintenance.core.util;
 
 import java.util.UUID;
 

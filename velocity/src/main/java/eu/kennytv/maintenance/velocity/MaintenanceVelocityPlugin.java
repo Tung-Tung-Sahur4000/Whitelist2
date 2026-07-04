@@ -42,7 +42,7 @@ import eu.kennytv.maintenance.core.hook.ServerListPlusHook;
 import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
 import eu.kennytv.maintenance.core.proxy.SettingsProxy;
 import eu.kennytv.maintenance.core.proxy.hook.LuckPermsProxyHook;
-import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
+import eu.kennytv.maintenance.core.util.ProfileLookup;
 import eu.kennytv.maintenance.core.proxy.util.ProxyOfflineSenderInfo;
 import eu.kennytv.maintenance.core.util.MaintenanceVersion;
 import eu.kennytv.maintenance.core.util.SenderInfo;

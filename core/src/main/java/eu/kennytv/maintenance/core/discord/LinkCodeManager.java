@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package eu.kennytv.maintenance.core.proxy.discord;
+package eu.kennytv.maintenance.core.discord;
 
-import eu.kennytv.maintenance.core.proxy.SettingsProxy;
+import eu.kennytv.maintenance.core.Settings;
 import java.security.SecureRandom;
 import java.util.Map;
 import java.util.UUID;
@@ -68,7 +68,7 @@ public final class LinkCodeManager {
      */
     private static final int MAX_ACTIVE_CODES = 2_000;
 
-    private final SettingsProxy settings;
+    private final Settings settings;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, PendingLink> codes = new ConcurrentHashMap<>();
     private final Map<UUID, String> activeCodeByUuid = new ConcurrentHashMap<>();
@@ -79,7 +79,7 @@ public final class LinkCodeManager {
      */
     private volatile long lastPurgeMs = 0L;
 
-    public LinkCodeManager(final SettingsProxy settings) {
+    public LinkCodeManager(final Settings settings) {
         this.settings = settings;
     }
 

@@ -37,10 +37,17 @@ public final class PlayerLoginListener extends JoinListenerBase implements Liste
 
     @EventHandler
     public void postLogin(final PlayerLoginEvent event) { // the validation event does not allow permission checking
-        final SenderInfo sender = new PaperSenderInfo(event.getPlayer());
+        final Player player = event.getPlayer();
+        // Record name -> uuid so cracked/offline and Bedrock players (who Mojang/Geyser cannot resolve) can be
+        // whitelisted by name later - even players who are about to be kicked are cached.
+        plugin.cachePlayer(player.getUniqueId(), player.getName());
+
+        final SenderInfo sender = new PaperSenderInfo(player);
         if (shouldKick(sender)) {
             event.setResult(PlayerLoginEvent.Result.KICK_OTHER);
-            event.kickMessage(settings.getKickMessage());
+            // With code-based linking enabled this shows the player their one-time link code; otherwise the
+            // normal kick message.
+            event.kickMessage(plugin.getJoinDenyMessage(sender));
             if (settings.isJoinNotifications()) {
                 broadcastJoinNotification(sender.name());
             }

@@ -40,24 +40,6 @@ public final class SettingsProxy extends Settings {
     private Map<String, String> maintenanceServers;
     private List<String> fallbackServers;
     private String waitingServer;
-    private boolean fallbackToOfflineUUID;
-    private boolean bedrockSupport;
-    private String bedrockPrefix;
-    private String discordInvite;
-    private boolean usernameCacheEnabled;
-    private int usernameCacheMaxEntries;
-    private boolean discordBotEnabled;
-    private String discordBotToken;
-    private String discordGuildId;
-    private String discordWhitelistRoleId;
-    private String discordAutoWhitelistRoleId;
-    private boolean discordRemoveOnRoleLoss;
-    private boolean discordAllowLinking;
-    private String linkingMode;
-    private boolean linkingRequireRole;
-    private int linkCodeLength;
-    private int linkCodeExpirySeconds;
-    private int linkMaxAttemptsPerMinute;
 
     private Map<String, List<String>> commandsOnMaintenanceEnable;
     private Map<String, List<String>> commandsOnMaintenanceDisable;
@@ -82,46 +64,6 @@ public final class SettingsProxy extends Settings {
         waitingServer = config.getString("waiting-server", "");
         if (waitingServer.isEmpty() || waitingServer.equalsIgnoreCase("none")) {
             waitingServer = null;
-        }
-        fallbackToOfflineUUID = config.getBoolean("fallback-to-offline-uuid", false);
-
-        final ConfigSection bedrockSection = config.getSection("bedrock");
-        bedrockSupport = bedrockSection.getBoolean("enabled", false);
-        bedrockPrefix = bedrockSection.getString("prefix", ".");
-
-        discordInvite = config.getString("discord-invite", "");
-
-        final ConfigSection usernameCacheSection = config.getSection("username-cache");
-        if (usernameCacheSection != null) {
-            usernameCacheEnabled = usernameCacheSection.getBoolean("enabled", true);
-            usernameCacheMaxEntries = usernameCacheSection.getInt("max-entries", 10000);
-        } else {
-            usernameCacheEnabled = true;
-            usernameCacheMaxEntries = 10000;
-        }
-
-        final ConfigSection discordSection = config.getSection("discord-bot");
-        discordBotEnabled = discordSection.getBoolean("enabled", false);
-        discordBotToken = discordSection.getString("token", "");
-        discordGuildId = discordSection.getString("guild-id", "");
-        discordWhitelistRoleId = discordSection.getString("whitelist-role-id", "");
-        discordAutoWhitelistRoleId = discordSection.getString("auto-whitelist-role-id", "");
-        discordRemoveOnRoleLoss = discordSection.getBoolean("remove-on-role-loss", true);
-        discordAllowLinking = discordSection.getBoolean("allow-linking", true);
-
-        final ConfigSection linkingSection = discordSection.getSection("linking");
-        if (linkingSection != null) {
-            linkingMode = normalizeLinkingMode(linkingSection.getString("mode", "off"));
-            linkingRequireRole = linkingSection.getBoolean("require-role", true);
-            linkCodeLength = linkingSection.getInt("code-length", 6);
-            linkCodeExpirySeconds = linkingSection.getInt("code-expiry-seconds", 600);
-            linkMaxAttemptsPerMinute = linkingSection.getInt("max-attempts-per-minute", 5);
-        } else {
-            linkingMode = "off";
-            linkingRequireRole = true;
-            linkCodeLength = 6;
-            linkCodeExpirySeconds = 600;
-            linkMaxAttemptsPerMinute = 5;
         }
 
         commandsOnMaintenanceEnable = new HashMap<>();
@@ -336,98 +278,6 @@ public final class SettingsProxy extends Settings {
     @Nullable
     public String getWaitingServer() {
         return waitingServer;
-    }
-
-    public boolean isFallbackToOfflineUUID() {
-        return fallbackToOfflineUUID;
-    }
-
-    public boolean isBedrockSupport() {
-        return bedrockSupport;
-    }
-
-    @Override
-    public String getDiscordInvite() {
-        return discordInvite;
-    }
-
-    public boolean isUsernameCacheEnabled() {
-        return usernameCacheEnabled;
-    }
-
-    public int getUsernameCacheMaxEntries() {
-        return usernameCacheMaxEntries;
-    }
-
-    public String getBedrockPrefix() {
-        return bedrockPrefix;
-    }
-
-    public boolean isDiscordBotEnabled() {
-        return discordBotEnabled;
-    }
-
-    public String getDiscordBotToken() {
-        return discordBotToken;
-    }
-
-    public String getDiscordGuildId() {
-        return discordGuildId;
-    }
-
-    public String getDiscordWhitelistRoleId() {
-        return discordWhitelistRoleId;
-    }
-
-    public String getDiscordAutoWhitelistRoleId() {
-        return discordAutoWhitelistRoleId;
-    }
-
-    public boolean isDiscordRemoveOnRoleLoss() {
-        return discordRemoveOnRoleLoss;
-    }
-
-    public boolean isDiscordAllowLinking() {
-        return discordAllowLinking;
-    }
-
-    public boolean isLinkingEnforced() {
-        return !linkingMode.equals("off");
-    }
-
-    public boolean isLinkingKickMode() {
-        return linkingMode.equals("kick");
-    }
-
-    public boolean isLinkingLimboMode() {
-        return linkingMode.equals("limbo");
-    }
-
-    public boolean isLinkingRequireRole() {
-        return linkingRequireRole;
-    }
-
-    public int getLinkCodeLength() {
-        return linkCodeLength;
-    }
-
-    public int getLinkCodeExpirySeconds() {
-        return linkCodeExpirySeconds;
-    }
-
-    public int getLinkMaxAttemptsPerMinute() {
-        return linkMaxAttemptsPerMinute;
-    }
-
-    private static String normalizeLinkingMode(@Nullable final String mode) {
-        if (mode == null) {
-            return "off";
-        }
-        final String value = mode.toLowerCase(Locale.ROOT).trim();
-        return switch (value) {
-            case "kick", "limbo" -> value;
-            default -> "off";
-        };
     }
 
     public List<String> getCommandsOnMaintenanceEnable(final Server server) {

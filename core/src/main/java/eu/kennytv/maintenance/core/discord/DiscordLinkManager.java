@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package eu.kennytv.maintenance.core.proxy.discord;
+package eu.kennytv.maintenance.core.discord;
 
 import eu.kennytv.maintenance.core.config.Config;
-import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
-import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
+import eu.kennytv.maintenance.core.MaintenancePlugin;
+import eu.kennytv.maintenance.core.util.ProfileLookup;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -51,7 +51,7 @@ import org.jetbrains.annotations.Nullable;
 public final class DiscordLinkManager {
 
     private static final String KEY_PREFIX = "id_";
-    private final MaintenanceProxyPlugin plugin;
+    private final MaintenancePlugin plugin;
     private final File file;
     private final Map<String, ProfileLookup> linksByDiscordId = new HashMap<>();
     private final Map<UUID, String> discordIdByUuid = new HashMap<>();
@@ -65,7 +65,7 @@ public final class DiscordLinkManager {
     private final Map<String, String> discordIdByLowercaseName = new HashMap<>();
     private Config config;
 
-    public DiscordLinkManager(final MaintenanceProxyPlugin plugin) {
+    public DiscordLinkManager(final MaintenancePlugin plugin) {
         this.plugin = plugin;
         this.file = new File(plugin.getDataFolder(), "DiscordLinks.yml");
         reload();

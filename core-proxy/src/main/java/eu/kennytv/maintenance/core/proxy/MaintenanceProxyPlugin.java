@@ -17,46 +17,26 @@
  */
 package eu.kennytv.maintenance.core.proxy;
 
-import com.google.common.io.CharStreams;
-import com.google.gson.JsonObject;
 import eu.kennytv.maintenance.api.event.proxy.ServerMaintenanceChangedEvent;
 import eu.kennytv.maintenance.api.proxy.MaintenanceProxy;
 import eu.kennytv.maintenance.api.proxy.Server;
 import eu.kennytv.maintenance.core.MaintenancePlugin;
 import eu.kennytv.maintenance.core.proxy.command.MaintenanceProxyCommand;
-import eu.kennytv.maintenance.core.proxy.discord.DiscordBot;
 import eu.kennytv.maintenance.core.proxy.runnable.SingleMaintenanceRunnable;
 import eu.kennytv.maintenance.core.proxy.runnable.SingleMaintenanceScheduleRunnable;
-import eu.kennytv.maintenance.core.proxy.util.GeyserApiUtil;
-import eu.kennytv.maintenance.core.proxy.util.PlayerNameCache;
-import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
 import eu.kennytv.maintenance.core.runnable.MaintenanceRunnableBase;
 import eu.kennytv.maintenance.core.util.DiscordWebhook;
-import eu.kennytv.maintenance.core.util.RateLimitedException;
-import eu.kennytv.maintenance.core.util.DummySenderInfo;
 import eu.kennytv.maintenance.core.util.SenderInfo;
 import eu.kennytv.maintenance.core.util.ServerType;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
-import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
-import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -64,11 +44,8 @@ import org.jetbrains.annotations.Nullable;
  * @since 3.0
  */
 public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implements MaintenanceProxy {
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_.]{1,16}$");
     private final Map<String, MaintenanceRunnableBase> serverTasks = new HashMap<>();
     protected SettingsProxy settingsProxy;
-    protected DiscordBot discordBot;
-    protected PlayerNameCache playerNameCache;
 
     protected MaintenanceProxyPlugin(final String version, final ServerType serverType) {
         super(version, serverType);
@@ -76,51 +53,10 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
 
     @Override
     public void disable() {
+        // Base flushes the username cache and shuts down the Discord bot.
         super.disable();
-        if (playerNameCache != null) {
-            playerNameCache.flush();
-        }
-        if (discordBot != null) {
-            discordBot.shutdown();
-        }
         if (settingsProxy.redisHandler() != null) {
             settingsProxy.redisHandler().close();
-        }
-    }
-
-    /**
-     * Starts the built-in Discord bot if it is enabled and a token is configured.
-     * The login happens off the main thread.
-     */
-    public void startDiscordBot() {
-        if (!settingsProxy.isDiscordBotEnabled()) {
-            if (settingsProxy.isLinkingEnforced()) {
-                getLogger().warning("Code-based linking is enabled, but the Discord bot is disabled - players will not be able to get a code! Enable the bot in the config.");
-            }
-            return;
-        }
-        final String token = settingsProxy.getDiscordBotToken();
-        if (token == null || token.isBlank()) {
-            getLogger().warning("The Discord bot is enabled, but no token is set in the config!");
-            return;
-        }
-
-        discordBot = new DiscordBot(this, settingsProxy);
-        async(() -> discordBot.start(token));
-
-        if (settingsProxy.isLinkingEnforced()) {
-            getLogger().warning("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            getLogger().warning("Code-based linking is active. CRACKED/OFFLINE SERVER NOTICE:");
-            getLogger().warning("  On a cracked server, usernames are not authenticated.");
-            getLogger().warning("  Any player can join with ANY username, so:");
-            getLogger().warning("  - Two players with the same name share the same UUID and");
-            getLogger().warning("    whitelist entry (username-collision / whitelist bypass).");
-            getLogger().warning("  - The linking code shown at join is the same for all players");
-            getLogger().warning("    sharing that username (code-theft race condition).");
-            getLogger().warning("  Mitigation: use an auth plugin (e.g. LimboAuth) and set");
-            getLogger().warning("  'code-length' to 8+ in config.yml to reduce risk.");
-            getLogger().warning("  See the 'linking:' block in config.yml for full details.");
-            getLogger().warning("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         }
     }
 
@@ -279,233 +215,8 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
         kickPlayersFromProxy();
     }
 
-    @Blocking
-    @Nullable
-    protected ProfileLookup doUUIDLookup(final String name) throws IOException {
-        // Username cache first. This is the only reliable way to resolve cracked/offline players (e.g. LimboAuth
-        // names with a '.' prefix) and Bedrock players, since they don't exist in the Mojang/Geyser databases.
-        if (playerNameCache != null) {
-            final ProfileLookup cached = playerNameCache.getProfile(name);
-            if (cached != null) {
-                return cached;
-            }
-        }
-
-        // Bedrock (Geyser/Floodgate) lookup: gamertags prefixed with the configured Bedrock prefix
-        // are resolved against the Geyser global API instead of the Mojang API.
-        final String bedrockPrefix = settingsProxy.getBedrockPrefix();
-        if (settingsProxy.isBedrockSupport() && !bedrockPrefix.isEmpty() && name.startsWith(bedrockPrefix)) {
-            final String gamertag = name.substring(bedrockPrefix.length());
-            if (gamertag.isEmpty()) {
-                return null;
-            }
-            return GeyserApiUtil.lookupBedrockProfile(gamertag, name);
-        }
-
-        // On an offline-mode (cracked) proxy, players are assigned offline UUIDs derived from their name,
-        // not their Mojang UUID. Looking the name up against Mojang would return the PREMIUM UUID, which
-        // never matches how the player actually joins, so they would stay blocked despite being "added".
-        // Resolve directly to the offline UUID the player will join with instead. (Already-joined players
-        // are served from the username cache above, which records their real session UUID either way.)
-        if (!isOnlineMode()) {
-            return new ProfileLookup(offlineUUID(name), name);
-        }
-
-        ProfileLookup profileLookup = null;
-        if (USERNAME_PATTERN.matcher(name).matches()) {
-            try {
-                profileLookup = doUUIDLookupMojangAPI(name);
-            } catch (RateLimitedException e) {
-                // Use fallback API if rate limit is reached
-                profileLookup = doUUIDLookupAshconAPI(name);
-            }
-        }
-
-        if (profileLookup == null && settingsProxy.isFallbackToOfflineUUID()) {
-            // Use offline uuid
-            return new ProfileLookup(offlineUUID(name), name);
-        }
-
-        return profileLookup;
-    }
-
-    private static UUID offlineUUID(final String name) {
-        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * Resolves both the premium (online) and cracked (offline) account a name could connect as, so a
-     * single {@code /whitelist add <name>} whitelists the player no matter which way they log in.
-     *
-     * <p>This matters on offline-mode and mixed servers (e.g. LimboAuth with premium auto-login): the
-     * exact same username can arrive with its Mojang UUID (premium) or with an offline UUID derived from
-     * the name (cracked). Whitelisting only one of them leaves the player blocked when they connect as
-     * the other. Bedrock gamertags have no such duality and resolve to a single Floodgate UUID.
-     */
-    @Override
-    public CompletableFuture<List<SenderInfo>> getOfflinePlayers(final String name) {
-        return CompletableFuture.supplyAsync(() -> {
-            final List<SenderInfo> profiles = new ArrayList<>();
-            final Set<UUID> seen = new HashSet<>();
-            try {
-                // Primary resolution: cache (real joined UUID) -> Bedrock -> mode-appropriate UUID.
-                final ProfileLookup primary = doUUIDLookup(name);
-                if (primary != null) {
-                    addProfile(profiles, seen, primary);
-                }
-
-                // Bedrock gamertags map to exactly one Floodgate UUID - no premium/offline variants.
-                final String bedrockPrefix = settingsProxy.getBedrockPrefix();
-                final boolean bedrock = settingsProxy.isBedrockSupport()
-                        && !bedrockPrefix.isEmpty() && name.startsWith(bedrockPrefix);
-                if (!bedrock && USERNAME_PATTERN.matcher(name).matches()) {
-                    // Premium variant: relevant on online servers and on mixed servers allowing premium logins.
-                    ProfileLookup premium = null;
-                    try {
-                        premium = doUUIDLookupMojangAPI(name);
-                    } catch (final RateLimitedException e) {
-                        premium = doUUIDLookupAshconAPI(name);
-                    }
-                    if (premium != null) {
-                        addProfile(profiles, seen, premium);
-                    }
-                    // Cracked variant: only possible when the proxy itself runs in offline mode.
-                    if (!isOnlineMode()) {
-                        addProfile(profiles, seen, new ProfileLookup(offlineUUID(name), name));
-                    }
-                }
-            } catch (final IOException e) {
-                getLogger().log(Level.WARNING, "Could not fully resolve profiles for " + name, e);
-            }
-            return profiles;
-        });
-    }
-
-    private static void addProfile(final List<SenderInfo> profiles, final Set<UUID> seen, final ProfileLookup profile) {
-        if (seen.add(profile.uuid())) {
-            profiles.add(new DummySenderInfo(profile.uuid(), profile.name()));
-        }
-    }
-
-    /**
-     * Official Mojang API
-     */
-    @Nullable
-    private ProfileLookup doUUIDLookupMojangAPI(final String name) throws IOException {
-        final URL url = URI.create("https://api.mojang.com/users/profiles/minecraft/" + name).toURL();
-        final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-
-        int status = connection.getResponseCode();
-        if (status == 429) {
-            throw new RateLimitedException();
-        }
-        if (status == 404) {
-            // Return null if profile not found
-            return null;
-        }
-
-        try (final InputStream in = connection.getInputStream()) {
-            final String output = CharStreams.toString(new InputStreamReader(in));
-            final JsonObject json = GSON.fromJson(output, JsonObject.class);
-
-            final UUID uuid = fromStringUUIDWithoutDashes(json.getAsJsonPrimitive("id").getAsString());
-            final String username = json.getAsJsonPrimitive("name").getAsString();
-            return new ProfileLookup(uuid, username);
-        }
-    }
-
-    /**
-     * Fallback API (Ashcon API)
-     */
-    @Nullable
-    private ProfileLookup doUUIDLookupAshconAPI(final String name) throws IOException {
-        final URL url = URI.create("https://api.ashcon.app/mojang/v2/user/" + name).toURL();
-        final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-
-        if (connection.getResponseCode() == 403) {
-            // Return null if profile not found
-            return null;
-        }
-
-        try (final InputStream in = connection.getInputStream()) {
-            final String output = CharStreams.toString(new InputStreamReader(in));
-            final JsonObject json = GSON.fromJson(output, JsonObject.class);
-
-            final UUID uuid = UUID.fromString(json.getAsJsonPrimitive("uuid").getAsString());
-            final String username = json.getAsJsonPrimitive("username").getAsString();
-            return new ProfileLookup(uuid, username);
-        }
-    }
-
-    private UUID fromStringUUIDWithoutDashes(String undashedUUID) {
-        return UUID.fromString(
-                undashedUUID.substring(0, 8) + "-" + undashedUUID.substring(8, 12) + "-" +
-                        undashedUUID.substring(12, 16) + "-" + undashedUUID.substring(16, 20) + "-" +
-                        undashedUUID.substring(20, 32)
-        );
-    }
-
     public SettingsProxy getSettingsProxy() {
         return settingsProxy;
-    }
-
-    /**
-     * Initializes the username cache. Call this once on enable (the data folder must exist).
-     */
-    public void initPlayerCache() {
-        if (settingsProxy.isUsernameCacheEnabled()) {
-            playerNameCache = new PlayerNameCache(this, settingsProxy.getUsernameCacheMaxEntries());
-        }
-    }
-
-    /**
-     * Records a player's current name -> uuid in the cache so they can later be whitelisted by name,
-     * even if they are a cracked/offline or Bedrock player that Mojang/Geyser cannot resolve.
-     */
-    public void cachePlayer(final UUID uuid, final String name) {
-        if (playerNameCache != null) {
-            playerNameCache.cache(uuid, name);
-        }
-    }
-
-    @Nullable
-    public String getCachedName(final UUID uuid) {
-        return playerNameCache != null ? playerNameCache.getName(uuid) : null;
-    }
-
-    /**
-     * Message shown when a non-whitelisted player is denied at join. If code-based linking is enabled, this
-     * generates the player's one-time code and tells them to DM it to the bot (DiscordSRV-style); otherwise
-     * the normal kick message is used.
-     *
-     * <p>The "already linked" check has two tiers:
-     * <ol>
-     *   <li><b>UUID-based</b> (authoritative): the UUID stored at link-time matches the current session UUID.</li>
-     *   <li><b>Name-based fallback</b>: the link was recorded under this player name but a different UUID.
-     *       This happens on offline/cracked servers when the same player's UUID changes across sessions
-     *       (e.g. they changed the case of their username, or are on different proxy software). In that
-     *       case we still show "pending approval" instead of issuing a fresh code, because the link exists.</li>
-     * </ol>
-     * Note: on a cracked server the name check is not an authentication proof — any player can claim any
-     * username. The fallback only prevents re-issuing codes; it does not grant additional access.
-     */
-    public Component getJoinDenyMessage(final SenderInfo sender) {
-        if (settingsProxy.isLinkingEnforced() && discordBot != null) {
-            // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
-            if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
-                return settingsProxy.getMessage("linkingPendingApproval");
-            }
-            // null means the active-code pool is at capacity — bot flood in progress.
-            // Show a "server busy" message so real players know to try again rather than
-            // thinking they need to do anything with Discord.
-            final String code = discordBot.generateLinkCode(sender.uuid(), sender.name());
-            if (code == null) {
-                return settingsProxy.getMessage("linkingServerBusy");
-            }
-            return settingsProxy.getMessage("linkingKickMessage", "%CODE%", code, "%BOT%", discordBot.getBotName());
-        }
-        return settingsProxy.getKickMessage();
     }
 
     /**
@@ -538,10 +249,4 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     protected abstract void kickPlayersTo(Server server);
 
     protected abstract void kickPlayersFromProxy();
-
-    /**
-     * @return {@code true} if the proxy itself is running in online mode (authenticated Mojang UUIDs),
-     *         {@code false} if it is in offline/cracked mode (offline UUIDs derived from the username)
-     */
-    public abstract boolean isOnlineMode();
 }

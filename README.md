@@ -118,17 +118,20 @@ complement each other. Use a **separate Discord bot application/token** for each
 gateway sessions at once.
 
 ## Running on a single Paper server
-Besides the two proxy platforms, the plugin can run on a single **Paper** (Spigot/Bukkit) server. Drop
-`ProxyWhitelist-Paper-<version>.jar` into `plugins/`. This gives you the whitelist toggle, `/whitelist
-add/remove/list`, the custom MOTD / player-count / hover messages, the start-/end-/schedule-timers, the
-kick message, join notifications, the Discord webhook and the ServerListPlus integration – all managed
-per single server.
+Besides the two proxy platforms, the plugin runs on a single **Paper** (Spigot/Bukkit) server. Drop
+`ProxyWhitelist-Paper-<version>.jar` into `plugins/`. The Paper build has the same feature set as the proxy
+build, minus the parts that only make sense on a proxy:
 
-The features that are inherently proxy-wide are **not** part of the Paper build: cross-proxy Redis sync,
-per-backend-server whitelisting, the built-in Discord bot (linking / role sync), and Bedrock/Geyser
-gamertag resolution all live in the proxy modules. On a single Paper server you can still bridge the
-whitelist to Discord role syncers (LuckPerms + DiscordSRV) through the `maintenance.whitelisted`
-permission, exactly as described above.
+* ✅ whitelist toggle, `/whitelist add/remove/list`, custom MOTD / player-count / hover messages, timers,
+  kick message, join notifications, Discord webhook and ServerListPlus integration
+* ✅ **Bedrock / Geyser** – whitelist Bedrock players by gamertag (`/whitelist add .Notch`), recognised on
+  join by their Floodgate UUID
+* ✅ **username cache** – cracked/offline (e.g. LimboAuth `.name`) and Bedrock players can be whitelisted by
+  name after they connect once
+* ✅ **built-in Discord bot** – `/whitelist add|remove|list`, `/link`, `/unlink`, `/lookup`, role sync and
+  code-based linking (`kick` mode)
+* ❌ **not** included (inherently proxy-wide): cross-proxy Redis sync, per-backend-server whitelisting, the
+  fallback/waiting-server routing and the `limbo` linking mode
 
 Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
 as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission

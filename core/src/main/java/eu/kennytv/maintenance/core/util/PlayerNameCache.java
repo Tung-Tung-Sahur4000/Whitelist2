@@ -15,10 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package eu.kennytv.maintenance.core.proxy.util;
+package eu.kennytv.maintenance.core.util;
 
 import eu.kennytv.maintenance.core.config.Config;
-import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
+import eu.kennytv.maintenance.core.MaintenancePlugin;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -53,7 +53,7 @@ import org.jetbrains.annotations.Nullable;
 public final class PlayerNameCache {
 
     private static final long SAVE_THROTTLE_MILLIS = 30_000L;
-    private final MaintenanceProxyPlugin plugin;
+    private final MaintenancePlugin plugin;
     private final File file;
     private final int maxEntries;
     // Insertion-ordered, so the first entry is the eldest (used for eviction).
@@ -63,7 +63,7 @@ public final class PlayerNameCache {
     private boolean dirty;
     private long lastSave;
 
-    public PlayerNameCache(final MaintenanceProxyPlugin plugin, final int maxEntries) {
+    public PlayerNameCache(final MaintenancePlugin plugin, final int maxEntries) {
         this.plugin = plugin;
         this.maxEntries = maxEntries > 0 ? maxEntries : Integer.MAX_VALUE;
         this.file = new File(plugin.getDataFolder(), "usernamecache.yml");

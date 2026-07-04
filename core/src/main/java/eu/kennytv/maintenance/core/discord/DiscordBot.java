@@ -15,11 +15,11 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package eu.kennytv.maintenance.core.proxy.discord;
+package eu.kennytv.maintenance.core.discord;
 
-import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
-import eu.kennytv.maintenance.core.proxy.SettingsProxy;
-import eu.kennytv.maintenance.core.proxy.util.ProfileLookup;
+import eu.kennytv.maintenance.core.MaintenancePlugin;
+import eu.kennytv.maintenance.core.Settings;
+import eu.kennytv.maintenance.core.util.ProfileLookup;
 import eu.kennytv.maintenance.core.util.SenderInfo;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -72,18 +72,18 @@ import org.jetbrains.annotations.Nullable;
  *     (configurable). Role holders are also reconciled on startup.</li>
  * </ul>
  *
- * <p>All whitelist changes go through {@link SettingsProxy}, so they are persisted and synced across proxies
+ * <p>All whitelist changes go through {@link Settings}, so they are persisted and synced across proxies
  * via Redis (if enabled).
  */
 public final class DiscordBot extends ListenerAdapter {
 
-    private final MaintenanceProxyPlugin plugin;
-    private final SettingsProxy settings;
+    private final MaintenancePlugin plugin;
+    private final Settings settings;
     private final DiscordLinkManager linkManager;
     private final LinkCodeManager linkCodeManager;
     private JDA jda;
 
-    public DiscordBot(final MaintenanceProxyPlugin plugin, final SettingsProxy settings) {
+    public DiscordBot(final MaintenancePlugin plugin, final Settings settings) {
         this.plugin = plugin;
         this.settings = settings;
         this.linkManager = new DiscordLinkManager(plugin);

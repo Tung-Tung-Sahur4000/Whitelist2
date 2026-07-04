@@ -22,6 +22,8 @@ import eu.kennytv.maintenance.core.Settings;
 import eu.kennytv.maintenance.core.dump.PluginDump;
 import eu.kennytv.maintenance.core.hook.LuckPermsHook;
 import eu.kennytv.maintenance.core.hook.ServerListPlusHook;
+import eu.kennytv.maintenance.core.util.DummySenderInfo;
+import eu.kennytv.maintenance.core.util.ProfileLookup;
 import eu.kennytv.maintenance.core.util.SenderInfo;
 import eu.kennytv.maintenance.core.util.ServerType;
 import eu.kennytv.maintenance.core.util.Task;
@@ -29,18 +31,20 @@ import eu.kennytv.maintenance.paper.command.MaintenancePaperCommand;
 import eu.kennytv.maintenance.paper.listener.PaperServerListPingListener;
 import eu.kennytv.maintenance.paper.listener.PlayerLoginListener;
 import eu.kennytv.maintenance.paper.util.PaperOfflinePlayerInfo;
+import eu.kennytv.maintenance.paper.util.PaperSenderInfo;
 import eu.kennytv.maintenance.paper.util.PaperTask;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import net.kyori.adventure.text.Component;
-import org.bstats.bukkit.Metrics;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.command.CommandSender;
@@ -60,12 +64,13 @@ public final class MaintenancePaperPlugin extends MaintenancePlugin {
         super(plugin.getDescription().getVersion(), ServerType.PAPER);
         this.plugin = plugin;
 
-        // Strip proxy-only config sections - a single Paper server has no proxied servers, cross-proxy Redis
-        // sync, Bedrock/Geyser resolution, username cache, or built-in Discord bot (those live in core-proxy).
+        // Strip only the config sections that are inherently proxy-wide (a single Paper server has no proxied
+        // servers, cross-proxy Redis sync, fallback/waiting-server routing or per-server command hooks). Bedrock,
+        // the username cache and the built-in Discord bot all work on a single server and stay in the config.
         settings = new Settings(this,
                 "redis", "proxied-maintenance-servers", "fallback", "waiting-server",
                 "commands-on-single-maintenance-enable", "commands-on-single-maintenance-disable",
-                "fallback-to-offline-uuid", "discord-invite", "bedrock", "username-cache", "discord-bot");
+                "fallback-to-offline-uuid");
 
         sendEnableMessage();
 
@@ -75,12 +80,14 @@ public final class MaintenancePaperPlugin extends MaintenancePlugin {
         pluginCommand.setExecutor(command);
         pluginCommand.setTabCompleter(command);
 
+        initPlayerCache();
+
         final PluginManager pm = getServer().getPluginManager();
         pm.registerEvents(new PlayerLoginListener(this, settings), plugin);
         pm.registerEvents(new PaperServerListPingListener(this, settings), plugin);
 
         continueLastEndtimer();
-        new Metrics(plugin, 2205);
+        startDiscordBot();
 
         final Plugin serverListPlus = pm.getPlugin("ServerListPlus");
         if (pm.isPluginEnabled(serverListPlus)) {
@@ -116,14 +123,39 @@ public final class MaintenancePaperPlugin extends MaintenancePlugin {
 
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final String name) {
-        final OfflinePlayer player = getServer().getOfflinePlayer(name);
-        return CompletableFuture.completedFuture(player.getName() != null ? new PaperOfflinePlayerInfo(player) : null);
+        final Player online = getServer().getPlayerExact(name);
+        if (online != null) {
+            return CompletableFuture.completedFuture(new PaperSenderInfo(online));
+        }
+        // Off the main thread: this may hit the username cache, the Geyser API (Bedrock) or the Mojang API.
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                final ProfileLookup profile = doUUIDLookup(name);
+                return profile == null ? null : new DummySenderInfo(profile.uuid(), profile.name());
+            } catch (final IOException e) {
+                getLogger().log(Level.WARNING, "Could not resolve player " + name, e);
+                return null;
+            }
+        });
     }
 
     @Override
     public CompletableFuture<@Nullable SenderInfo> getOfflinePlayer(final UUID uuid) {
+        final Player online = getServer().getPlayer(uuid);
+        if (online != null) {
+            return CompletableFuture.completedFuture(new PaperSenderInfo(online));
+        }
+        final String cachedName = getCachedName(uuid);
+        if (cachedName != null) {
+            return CompletableFuture.completedFuture(new DummySenderInfo(uuid, cachedName));
+        }
         final OfflinePlayer player = getServer().getOfflinePlayer(uuid);
         return CompletableFuture.completedFuture(player.getName() != null ? new PaperOfflinePlayerInfo(player) : null);
+    }
+
+    @Override
+    public boolean isOnlineMode() {
+        return getServer().getOnlineMode();
     }
 
     @Override
