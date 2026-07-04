@@ -1,8 +1,9 @@
 # ProxyWhitelist
 
-ProxyWhitelist is a network-wide whitelist plugin for **BungeeCord** and **Velocity** proxies. When the
-whitelist is enabled, only whitelisted players may join the network (or specific backend servers), everyone
-else is shown a configurable kick message / MOTD.
+ProxyWhitelist is a network-wide whitelist plugin for **BungeeCord** and **Velocity** proxies, and it also
+runs directly on a single **Paper** (Spigot/Bukkit) server. When the whitelist is enabled, only whitelisted
+players may join the network (or specific backend servers), everyone else is shown a configurable kick
+message / MOTD.
 
 It is a proxy-only fork of [kennytv's Maintenance plugin](https://github.com/kennytv/Maintenance), refocused
 around whitelisting and extended with Bedrock support and a built-in Discord bot.
@@ -116,10 +117,27 @@ dedicated bridge plugin such as [VelocityDiscord](https://modrinth.com/plugin/ve
 complement each other. Use a **separate Discord bot application/token** for each, since a single token cannot run two
 gateway sessions at once.
 
+## Running on a single Paper server
+Besides the two proxy platforms, the plugin can run on a single **Paper** (Spigot/Bukkit) server. Drop
+`ProxyWhitelist-Paper-<version>.jar` into `plugins/`. This gives you the whitelist toggle, `/whitelist
+add/remove/list`, the custom MOTD / player-count / hover messages, the start-/end-/schedule-timers, the
+kick message, join notifications, the Discord webhook and the ServerListPlus integration – all managed
+per single server.
+
+The features that are inherently proxy-wide are **not** part of the Paper build: cross-proxy Redis sync,
+per-backend-server whitelisting, the built-in Discord bot (linking / role sync), and Bedrock/Geyser
+gamertag resolution all live in the proxy modules. On a single Paper server you can still bridge the
+whitelist to Discord role syncers (LuckPerms + DiscordSRV) through the `maintenance.whitelisted`
+permission, exactly as described above.
+
+Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
+as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission
+nodes (`maintenance.admin`, `maintenance.bypass`, `maintenance.whitelisted`, ...) are unchanged.
+
 ## Compiling
-Clone the project and build with Gradle (`./gradlew build`). You need a JDK 21+ (the project targets 17).
-The proxy jars are written to `build/libs/ProxyWhitelist-Bungee-<version>.jar` and
-`build/libs/ProxyWhitelist-Velocity-<version>.jar`.
+Clone the project and build with Gradle (`./gradlew build`). You need a JDK 21+.
+The jars are written to `build/libs/ProxyWhitelist-Bungee-<version>.jar`,
+`build/libs/ProxyWhitelist-Velocity-<version>.jar` and `build/libs/ProxyWhitelist-Paper-<version>.jar`.
 
 ## License
 This project is licensed under the [GNU General Public License v3](LICENSE.txt), like the upstream project.

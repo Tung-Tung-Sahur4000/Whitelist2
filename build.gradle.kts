@@ -14,6 +14,7 @@ allprojects {
 }
 
 val platforms = setOf(
+    projects.maintenancePaper,
     projects.maintenanceBungee,
     projects.maintenanceVelocity
 ).map { it.path }

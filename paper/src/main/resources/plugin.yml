@@ -1,0 +1,17 @@
+name: ProxyWhitelist
+version: ${version}
+main: eu.kennytv.maintenance.paper.MaintenancePaperBase
+author: kennytv
+description: ${description}
+softdepend: [ServerListPlus, LuckPerms]
+website: https://hangar.papermc.io/kennytv/Maintenance
+api-version: '1.20'
+folia-supported: true
+
+commands:
+  pwhitelist:
+    # Vanilla already owns '/whitelist' on a Paper server, so the plugin's primary label is 'pwhitelist'
+    # (with '/whitelist' kept as an alias, reachable as '/proxywhitelist:whitelist' when vanilla claims the bare name).
+    description: ProxyWhitelist main command
+    aliases: [pwl, whitelist, maintenance, mt]
+    permission: maintenance.command
