@@ -548,10 +548,10 @@ public abstract class MaintenancePlugin implements Maintenance {
                         addProfile(profiles, seen, new ProfileLookup(offlineUUID(name), name));
                     }
 
-                    // If a premium/cracked authenticator (e.g. FastLogin) knows which account this name
-                    // actually logs in as, drop the other variant so we don't also whitelist, say, the
-                    // premium account of a name whose owner here is a cracked player.
-                    return narrowToKnownAccountType(name, profiles);
+                    // Narrow the premium/offline pair down to a single variant when we can: a FastLogin-known
+                    // account type, or strict mode (whitelist-both-variants: false) on an offline server, where
+                    // we refuse to speculatively whitelist the premium account of an unconfirmed name.
+                    return narrowProfiles(name, profiles);
                 }
             } catch (final IOException e) {
                 getLogger().log(Level.WARNING, "Could not fully resolve profiles for " + name, e);
@@ -561,23 +561,41 @@ public abstract class MaintenancePlugin implements Maintenance {
     }
 
     /**
-     * If {@link #premiumResolver} reports a definite account type for the name, keeps only the matching
-     * profile (premium Mojang UUID or offline UUID). Falls back to the full, unfiltered list whenever the
-     * type is unknown or filtering would leave nothing to whitelist, so the hook can never make a name
-     * un-whitelistable.
+     * Narrows a resolved premium/offline pair down to a single account variant when we can be confident:
+     * <ul>
+     *   <li>{@link #premiumResolver} (e.g. FastLogin) reports a definite account type - keep that variant;</li>
+     *   <li>strict mode ({@code whitelist-both-variants: false}) on an offline server with an unconfirmed
+     *       name - keep only the offline (cracked) UUID, never the speculative premium one.</li>
+     * </ul>
+     * Otherwise the full list is returned. Also falls back to the full list if narrowing would leave nothing,
+     * so this can never make a name un-whitelistable.
      */
-    private List<SenderInfo> narrowToKnownAccountType(final String name, final List<SenderInfo> profiles) {
+    private List<SenderInfo> narrowProfiles(final String name, final List<SenderInfo> profiles) {
+        if (profiles.size() < 2) {
+            return profiles;
+        }
+
+        // keepOffline: TRUE = keep only the offline UUID, FALSE = keep only the premium UUID, null = keep both.
+        final Boolean keepOffline;
         final PremiumResolver.AccountType type = accountType(name);
-        if (type == PremiumResolver.AccountType.UNKNOWN || profiles.size() < 2) {
+        if (type == PremiumResolver.AccountType.CRACKED) {
+            keepOffline = Boolean.TRUE;
+        } else if (type == PremiumResolver.AccountType.PREMIUM) {
+            keepOffline = Boolean.FALSE;
+        } else if (!settings.whitelistBothVariants() && !isOnlineMode()) {
+            // Strict, unknown account type: don't speculatively whitelist the premium account of the name.
+            keepOffline = Boolean.TRUE;
+        } else {
+            keepOffline = null;
+        }
+        if (keepOffline == null) {
             return profiles;
         }
 
         final UUID offline = offlineUUID(name);
         final List<SenderInfo> narrowed = new ArrayList<>();
         for (final SenderInfo profile : profiles) {
-            final boolean isOffline = profile.uuid().equals(offline);
-            final boolean keep = type == PremiumResolver.AccountType.CRACKED ? isOffline : !isOffline;
-            if (keep) {
+            if (profile.uuid().equals(offline) == keepOffline) {
                 narrowed.add(profile);
             }
         }

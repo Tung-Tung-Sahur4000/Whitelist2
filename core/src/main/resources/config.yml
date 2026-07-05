@@ -115,6 +115,20 @@ kick-online-players: true
 # When fetched player does not exist then fallback to offline uuid. Only works on proxies like Velocity or BungeeCord
 fallback-to-offline-uuid: false
 
+# How '/whitelist add <name>' handles a name it has never seen and cannot confirm the account type of.
+# On an offline-mode / mixed (premium + cracked) server the same name could join with its Mojang (premium)
+# UUID or an offline UUID derived from the name, and without a prior join (username cache) or a premium
+# authenticator (e.g. FastLogin) there is no way to know which.
+#   true  - whitelist BOTH candidate UUIDs, so the player matches whichever way they log in (most convenient).
+#           Harmless on a pure offline server (the premium UUID is never actually used there), but on a server
+#           that authenticates premium logins it also whitelists the Mojang owner of that name.
+#   false - STRICT: only whitelist a UUID we are sure about (a username-cache hit or a FastLogin-confirmed
+#           account type). For an unconfirmed name on an offline server, only the offline (cracked) UUID is
+#           added, never the speculative premium one. A premium player that FastLogin does not yet know must
+#           then be added via FastLogin's /premium or by connecting once (so they get cached) first.
+# Names already resolved from the username cache or confirmed by FastLogin are unaffected either way.
+whitelist-both-variants: true
+
 # A Discord invite link for your server. Usable as the %DISCORD% placeholder in any message - most usefully in
 # the 'kickmessage' so non-whitelisted players know where to apply. Example: "discord.gg/yourserver"
 discord-invite: ""

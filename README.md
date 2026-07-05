@@ -163,12 +163,30 @@ player is premium, or an **offline** UUID derived from the name when they're cra
 they've joined once the username cache pins their real UUID. (AuthMe itself only tracks registration/login
 sessions, so it isn't consulted for UUID resolution — FastLogin is the one that knows premium vs cracked.)
 
+The plugin resolves a name in this order: **username cache** (the real UUID a player joined with — the most
+precise source, and the same one the proxy builds use), then **FastLogin** if present, then, only for a name
+it has never seen and cannot confirm, the both-variants guess above. So "whitelist both" is a last resort,
+not the primary path.
+
 If **FastLogin** is installed, the plugin hooks it automatically (soft dependency, no config needed) and asks
 it which account type a name actually logs in as. When FastLogin knows (the name has joined before, or staff
 ran FastLogin's `/premium` / `/cracked` command), the plugin whitelists **only that variant** — so adding your
 cracked regular no longer also whitelists the stranger who owns that name on Mojang, and vice-versa. When
-FastLogin has no record for the name, or isn't installed, the plugin falls back to whitelisting both variants;
+FastLogin has no record for the name, or isn't installed, the plugin falls back to the configured behavior;
 the hook only ever *narrows* the result and can never block a whitelist add.
+
+**`whitelist-both-variants`** (`config.yml`, default `true`) controls that never-seen-name fallback:
+
+* `true` — whitelist both candidate UUIDs. Most convenient, and harmless on a *pure* offline server: with no
+  premium authenticator the server never assigns anyone the Mojang UUID, so the extra premium entry is inert.
+* `false` (**strict**) — only whitelist a UUID we're sure about (a cache hit or a FastLogin-confirmed type).
+  For an unconfirmed name on an offline server, only the offline (cracked) UUID is added — never the
+  speculative premium one, closing the window where a stranger owning that Mojang name could join a FastLogin
+  server. The trade-off: a premium player FastLogin doesn't yet know must be added via FastLogin's `/premium`,
+  or by connecting once so the username cache learns their real UUID.
+
+This resolution (and the toggle) is shared with the proxy builds — they take the exact same both-variants
+approach for hybrid servers, since they have no FastLogin either.
 
 ## Compiling
 Clone the project and build with Gradle (`./gradlew build`). You need a JDK 21+.

@@ -88,6 +88,7 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
     // Whitelist features shared by all platforms (Bedrock, username cache, built-in Discord bot).
     // Genuinely proxy-wide settings (Redis, per-server, fallback/waiting-server) stay in SettingsProxy.
     private boolean fallbackToOfflineUUID;
+    private boolean whitelistBothVariants;
     private boolean bedrockSupport;
     private String bedrockPrefix;
     private String discordInvite;
@@ -298,6 +299,7 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
      */
     private void loadWhitelistFeatureSettings() {
         fallbackToOfflineUUID = config.getBoolean("fallback-to-offline-uuid", false);
+        whitelistBothVariants = config.getBoolean("whitelist-both-variants", true);
 
         final ConfigSection bedrockSection = config.getSection("bedrock");
         bedrockSupport = bedrockSection.getBoolean("enabled", false);
@@ -871,6 +873,14 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
 
     public boolean isFallbackToOfflineUUID() {
         return fallbackToOfflineUUID;
+    }
+
+    /**
+     * Whether {@code /whitelist add} may whitelist both the premium and offline UUID of an unconfirmed name.
+     * When {@code false} (strict) only a cache-resolved or FastLogin-confirmed variant is added.
+     */
+    public boolean whitelistBothVariants() {
+        return whitelistBothVariants;
     }
 
     public boolean isBedrockSupport() {
