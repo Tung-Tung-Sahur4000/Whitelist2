@@ -1,0 +1,45 @@
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+
+dependencyResolutionManagement {
+    repositories {
+        maven("https://repo.papermc.io/repository/maven-public/")
+        maven("https://repo.spongepowered.org/repository/maven-public/")
+        maven("https://repo.codemc.io/repository/maven-public/")
+        maven("https://repo.dmulloy2.net/repository/public/")
+        maven("https://repo.velocityctd.com/snapshots")
+        mavenCentral()
+    }
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+}
+
+pluginManagement {
+    plugins {
+        id("net.kyori.blossom") version "2.2.0"
+        id("org.jetbrains.gradle.plugin.idea-ext") version "1.4.1"
+        id("com.gradleup.shadow") version "9.4.1"
+        id("com.gradleup.nmcp") version "1.4.4"
+    }
+}
+
+rootProject.name = "maintenance-parent"
+
+includeBuild("build-logic")
+
+subproject("api")
+subproject("api-proxy")
+subproject("core")
+subproject("core-proxy")
+subproject("paper")
+subproject("bungee")
+subproject("velocity")
+
+fun subproject(name: String) {
+    setupSubproject("maintenance-$name") {
+        projectDir = file(name)
+    }
+}
+
+inline fun setupSubproject(name: String, block: ProjectDescriptor.() -> Unit) {
+    include(name)
+    project(":$name").apply(block)
+}

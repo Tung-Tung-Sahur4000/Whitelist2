@@ -1,0 +1,255 @@
+###############################################################################
+# ProxyWhitelist - a proxy whitelist plugin (fork of kennytv's Maintenance).
+# Bedrock support + a built-in Discord bot. Report bugs: https://github.com/kennytv/Maintenance/issues
+# Config/language files use MiniMessage (not legacy). Edit/preview: https://webui.advntr.dev/
+# MiniMessage format reference: https://docs.papermc.io/adventure/minimessage/format/
+###############################################################################
+
+# Changes the language of command feedback/messages.
+# Currently available are: en (English), de (German), fr (French), pt (Portuguese), es (Spanish), ru (Russian), zh (Chinese), it (Italian),
+#  pl (Polish), tr (Turkish), sv (Swedish), uk (Ukrainian), ja (Japanese), da (Danish), ko (Korean), hu (Hungarian), vi (Vietnamese)
+language: en
+
+# MASTER SWITCH. Enables the whitelist.
+# When enabled, only whitelisted players (or players with the 'maintenance.whitelisted' / 'maintenance.bypass'
+# permission) can join - everyone else is blocked. Toggle it in-game with '/whitelist on' and '/whitelist off'.
+whitelist-enabled: false
+
+# The currently active display-mode key (used for mode-specific MOTD/icons).
+# Use 'default' or leave empty to use fallback messages.
+active-mode: default
+
+# Value for the %REASON% placeholder in the whitelist messages.
+# This can be changed via /whitelist setreason <text>.
+active-reason: ""
+
+# Enables the whitelist on certain servers managed by your proxy instance(s).
+# The value is the mode key used for ping/player count messages for that server.
+proxied-maintenance-servers:
+  PaperServer1: default
+# AnotherServer: release
+
+# If the whitelist is enabled on a proxied server with players on it, they will be sent to the fallback server instead of being kicked off the network.
+# If the fallback server is not reachable/not set, they will just be kicked off the network.
+# This can also be set to an array to set multiple fallback servers, in case one server is not always reachable: 'fallback: [s1, s2, s3, ...]'
+fallback: lobby
+
+# If the whitelist is enabled globally, you can define a "waiting" lobby for non-whitelisted players to be sent to instead of being kicked.
+# This is also used as the Limbo target for the 'limbo' linking mode. Leave this empty to disable.
+waiting-server: ""
+
+# The message (MOTD) shown in the multiplayer server list when the whitelist is enabled.
+# If you put in multiple entries, one of them will be chosen randomly on every ping.
+# The type of mode can be defined in the command, or will be the default mode.
+ping-message:
+  enabled: true
+  # Always uses 'default' if not defined in the command or not present in the config.
+  # Additional examples could look as follows:
+  #  default:
+  #    - "<red>This server is whitelist-only<br><gradient:#fbffc2:#0fffff>Apply on our Discord!"
+  #    - "<red>Wooow you found our secondary MOTD!"
+  #  reason:
+  #    - "<red>This server is whitelist-only<br><gradient:#fbffc2:#0fffff>%REASON%"
+  #  release:
+  #    - "<gold>We're currently preparing the release, come back soon!"
+  messages:
+    default:
+      - "<red>This server is currently whitelist-only<br><gradient:#fbffc2:#0fffff>Apply on our Discord!"
+  # If set to true and an endtimer is currently running, a message from this pool will be chosen
+  # instead of the ones above, so you can have different messages for when an endtimer is running/not running.
+  enable-timer-specific-messages: true
+  # If running an endtimer, the time left can be displayed by including '%TIMER%' in a ping message.
+  timer-messages:
+    default:
+      - "<red>This server is whitelist-only<br><gradient:#fbffc2:#fffff>Open in:</gradient> <color:#aa55ee>%TIMER%"
+
+# If enabled, the message below will be shown in the top right corner of the server in the server list, where the player count would normally be displayed.
+# Same as the ping-message, you can define messages for different modes.
+# You can use '%ONLINE%' and '%MAX%' if you want to include the player count in a custom message (e.g. "Whitelist %ONLINE%/%MAX%").
+# DOES NOT SUPPORT RGB!
+player-count-message:
+  enabled: true
+  messages:
+    default: "<dark_red>Whitelist"
+  # If set to true and an endtimer is currently running, the timer message will be used instead of the normal one.
+  enable-timer-specific-message: false
+  timer-messages:
+    default: "<dark_red>Open in: <yellow>%TIMER%"
+
+# Is shown when you move your mouse above the text in the top right corner of the server in the server list, where the player count would normally be displayed.
+# Same as the ping-message, you can define messages for different modes.
+# DOES NOT SUPPORT RGB!
+player-list-hover-message:
+  enabled: true
+  messages:
+    default: "<red>Whitelisted<br><red>players only"
+  # If set to true and an endtimer is currently running, the timer message will be used instead of the normal one.
+  enable-timer-specific-message: false
+  timer-messages:
+    default: "<red>Open in:<br><red><yellow>%TIMER%"
+
+# Any extra commands inside the arrays will be executed when the whitelist is enabled/disabled.
+# Example: commands-on-maintenance-enable: ["say hello!", "stop"]
+commands-on-maintenance-enable: []
+commands-on-maintenance-disable: []
+
+# Any extra commands inside the "all" array will be executed when the whitelist is enabled/disabled on a proxied server.
+# You can also add commands for specific servers by adding a new array with the server name as key.
+# In the commands, you can use the %SERVER% placeholder to get the server name.
+# Example: coolserver: ["say hello", "othercommand %SERVER%"]
+commands-on-single-maintenance-enable:
+  all: []
+commands-on-single-maintenance-disable:
+  all: []
+
+# If set to true, the server icon will be changed to the 'maintenance-icon.png' file in the plugin's folder while the whitelist is enabled.
+custom-maintenance-icon: false
+
+# If set to true, players with the 'maintenance.joinnotification' permission will receive a message
+# that a non-whitelisted player tried to join while the whitelist is enabled.
+send-join-notification: false
+
+# Set this to false if you do not want players to be kicked when you enable the whitelist (new connections will still be blocked).
+kick-online-players: true
+
+# When fetched player does not exist then fallback to offline uuid. Only works on proxies like Velocity or BungeeCord
+fallback-to-offline-uuid: false
+
+# How '/whitelist add <name>' handles a name it has never seen and cannot confirm the account type of.
+# On an offline-mode / mixed (premium + cracked) server the same name could join with its Mojang (premium)
+# UUID or an offline UUID derived from the name, and without a prior join (username cache) or a premium
+# authenticator (e.g. FastLogin) there is no way to know which.
+#   true  - whitelist BOTH candidate UUIDs, so the player matches whichever way they log in (most convenient).
+#           Harmless on a pure offline server (the premium UUID is never actually used there), but on a server
+#           that authenticates premium logins it also whitelists the Mojang owner of that name.
+#   false - STRICT: only whitelist a UUID we are sure about (a username-cache hit or a FastLogin-confirmed
+#           account type). For an unconfirmed name on an offline server, only the offline (cracked) UUID is
+#           added, never the speculative premium one. A premium player that FastLogin does not yet know must
+#           then be added via FastLogin's /premium or by connecting once (so they get cached) first.
+# Names already resolved from the username cache or confirmed by FastLogin are unaffected either way.
+whitelist-both-variants: true
+
+# A Discord invite link for your server. Usable as the %DISCORD% placeholder in any message - most usefully in
+# the 'kickmessage' so non-whitelisted players know where to apply. Example: "discord.gg/yourserver"
+discord-invite: ""
+
+# Remembers the name <-> uuid of players that join, so cracked/offline players (e.g. LimboAuth names with a
+# '.' prefix) and Bedrock players can be whitelisted by name. It is bounded and throttled, so a join flood /
+# bot attack with random names cannot bloat it or hammer the disk - the oldest entries are dropped past the limit.
+username-cache:
+  enabled: true
+  # Maximum number of cached players. Older entries are evicted once this is exceeded.
+  max-entries: 10000
+
+# If enabled and the server is restarted while running an endtimer, the timer will be continued after the restart.
+# If the timer ends while the server is offline, the whitelist will be disabled as soon as the server starts again.
+continue-endtimer-after-restart:
+  enabled: false
+  # This value is set everytime an endtimer is started, cancelled or ended.
+  # Do not manually change this value.
+  end: 0
+
+# If using the timer command: In what intervalls before enabling/disabling the whitelist there will be a broadcast.
+timer-broadcast-for-seconds: [1200, 900, 600, 300, 120, 60, 30, 20, 10, 5, 4, 3, 2, 1]
+
+# Allows sending a Discord webhook on certain events.
+webhook:
+  enabled: false
+  # Possible values: maintenance_status, starttimer_started, endtimer_started, blocked_join
+  enabled-events: ["maintenance_status", "starttimer_started", "endtimer_started"]
+  # Copy and paste the webhook url from Server Settings --> Apps Integrations --> Webhooks
+  url: ""
+  # The username displayed for the webhook bot message.
+  username: "Whitelist"
+  # The avatar URL used for the webhook bot message. Leave empty to use the default Discord webhook avatar.
+  avatar-url: ""
+
+# If you have 2 or more proxy instances, the Redis connection will make sure all proxies
+# have the same whitelist status (global as well as per server) and whitelisted players,
+# so you won't have to update these on every proxy by hand.
+redis:
+  enabled: false
+  # Make sure your Redis instance is properly protected.
+  # URI format: redis[s]://[[username][:password]@][host][:port][/db-number]
+  # E.g. an SSL connection to a password protected redis could look like this: "rediss://user:password@127.0.0.1:6379"
+  uri: "redis://localhost:6379"
+
+# Bedrock (Geyser/Floodgate) support.
+# When enabled, Bedrock players can be whitelisted by their gamertag, prefixed with the 'prefix' below.
+# Example: '/whitelist add .Notch' resolves the gamertag 'Notch' via the Geyser global API into the
+# Floodgate UUID and stores it on the whitelist. Bedrock players are recognized on join by their
+# Floodgate UUID, so no extra dependency is required.
+bedrock:
+  enabled: false
+  # The Floodgate username prefix. Must match the prefix configured in your Floodgate config (Floodgate's default is ".").
+  prefix: "."
+
+# Built-in Discord bot. Lets staff manage the whitelist from Discord and (optionally) auto-whitelist
+# players based on a Discord role once they have linked their Minecraft account.
+discord-bot:
+  enabled: false
+  # The Discord bot token (from https://discord.com/developers/applications -> your app -> Bot).
+  token: ""
+  # Optional: limit slash commands to a single guild (they appear instantly instead of up to 1h globally).
+  guild-id: ""
+  # Optional: role id allowed to use the '/whitelist add|remove|list' commands.
+  # Leave empty to require the Discord 'Administrator' permission instead.
+  whitelist-role-id: ""
+  # Optional: members who linked their Minecraft account (via '/link') and have this role are
+  # automatically added to the whitelist. Leave empty to disable role syncing.
+  # NOTE: role syncing requires the 'Server Members Intent' to be enabled for your bot in the
+  # Discord developer portal.
+  auto-whitelist-role-id: ""
+  # If true, players are removed from the whitelist again when they lose the auto-whitelist role.
+  remove-on-role-loss: true
+  # If true, members can link their own account with '/link <name>'. If false, only staff can add
+  # players through '/whitelist add'.
+  allow-linking: true
+  # Code-based linking: players prove they own a Minecraft account by linking it in-game.
+  # The whitelist must be enabled (/whitelist on) for this to take effect. Non-whitelisted players are
+  # given a one-time code and told to DM it to the bot; once they DM it (and have the role if required),
+  # they are added to the whitelist.
+  #
+  # ─── CRACKED / OFFLINE-MODE SERVER SECURITY NOTICE ───────────────────────────────────────────────
+  # On a cracked (offline-mode) proxy, Minecraft usernames are NOT authenticated. This means:
+  #
+  # 1. USERNAME COLLISION / WHITELIST BYPASS: Two players joining with the same username share the
+  #    same offline UUID and the same whitelist entry. Anyone who knows a whitelisted player's username
+  #    can join using it and bypass the whitelist. This cannot be fixed at the plugin level.
+  #    Mitigation: run an auth plugin (e.g. LimboAuth, AuthMe Velocity) so that login is protected by
+  #    a password known only to the real player.
+  #
+  # 2. CODE THEFT RACE: Because two players with the same username share the same UUID, they are shown
+  #    the same linking code. The first Discord user to DM the code to the bot wins the link. To reduce
+  #    this window, increase 'code-length' (8+ recommended for cracked servers).
+  #
+  # 3. UUID DRIFT: Some cracked clients generate a fresh UUID each session. The plugin detects this
+  #    and falls back to a name-based linked check, so already-linked players still see the
+  #    "pending approval" message rather than a new code. However, the whitelist entry uses the UUID
+  #    from link-time; if the UUID drifted, the player will still be blocked until an admin re-adds
+  #    them with '/whitelist add <name>' which re-resolves their current UUID.
+  # ──────────────────────────────────────────────────────────────────────────────────────────────────
+  linking:
+    # off   = no code requirement (manual whitelist / role sync only).
+    # kick  = unlinked players are kicked at join with their code (like DiscordSRV's "require linking to play").
+    # limbo = unlinked players are sent to the 'waiting-server' (use a Limbo server) and shown their code there.
+    mode: "off"
+    # If true, a linked player must also have the auto-whitelist-role to actually be whitelisted.
+    require-role: true
+    # Number of digits in the linking code.
+    # 6 is the minimum recommended for online-mode servers.
+    # 8+ is strongly recommended for cracked/offline-mode servers (reduces code-theft race window).
+    code-length: 6
+    # How long a code stays valid, in seconds. Players must DM the bot within this window.
+    code-expiry-seconds: 600
+    # Max wrong code guesses a single Discord user may make per minute before being temporarily blocked
+    # (anti-brute-force).
+    max-attempts-per-minute: 5
+
+# If disabled, you will no longer receive any messages if there is an update.
+# Not recommended to disable, as new versions generally tend to run better and with fewer bugs.
+# However, you can always check for updates manually using the '/whitelist update' command.
+update-checks: true
+
+# Used for autoupdating the config, do not change this value.
+config-version: 16

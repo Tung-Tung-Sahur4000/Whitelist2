@@ -1,0 +1,5 @@
+# You can add and remove players with the '/whitelist <add/remove> <name/uuid>' command.
+# Bedrock players (via Geyser/Floodgate) can be added with their gamertag prefixed by the configured
+# bedrock prefix, e.g. '/whitelist add .Notch' (see the 'bedrock' section in config.yml).
+# Alternatively, you can just add their uuid and name here by hand in the following format:
+# a8179ff3-c201-4a75-bdaa-9d14aca6f83f: kennytv

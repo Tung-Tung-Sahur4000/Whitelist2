@@ -1,0 +1,113 @@
+/*
+ * This file is part of Maintenance - https://github.com/kennytv/Maintenance
+ * Copyright (C) 2018-2024 kennytv (https://github.com/kennytv)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package eu.kennytv.maintenance.core.proxy.command.subcommand;
+
+import eu.kennytv.maintenance.api.proxy.Server;
+import eu.kennytv.maintenance.core.proxy.MaintenanceProxyPlugin;
+import eu.kennytv.maintenance.core.proxy.command.ProxyCommandInfo;
+import eu.kennytv.maintenance.core.runnable.MaintenanceRunnableBase;
+import eu.kennytv.maintenance.core.util.DiscordWebhook;
+import eu.kennytv.maintenance.core.util.SenderInfo;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import net.kyori.adventure.text.Component;
+
+public final class SingleStarttimerCommand extends ProxyCommandInfo {
+
+    public SingleStarttimerCommand(final MaintenanceProxyPlugin plugin) {
+        super(plugin, null);
+    }
+
+    @Override
+    public boolean hasPermission(final SenderInfo sender) {
+        return sender.hasMaintenancePermission("timer") || sender.hasPermission("maintenance.singleserver.timer");
+    }
+
+    @Override
+    public void execute(final SenderInfo sender, final String[] args) {
+        if (args.length == 2) {
+            if (checkPermission(sender, "timer")) return;
+
+            final Duration duration = plugin.getCommandManager().parseDurationAndCheckTask(sender, args[1]);
+            if (duration == null) {
+                sender.send(getHelpMessage());
+                return;
+            }
+            if (plugin.isMaintenance()) {
+                sender.send(getMessage("alreadyEnabled"));
+                return;
+            }
+
+            plugin.startMaintenanceRunnable(duration, true);
+            final Component message = getMessage("starttimerStarted", "%TIME%", plugin.getRunnable().getTime());
+            sender.send(message);
+            plugin.sendWebhookMessage("webhookStarttimerStarted", DiscordWebhook.EventType.STARTTIMER_STARTED,
+                    "%TIME%", plugin.getRunnable().getTime(),
+                    "%TIMESTAMP%", plugin.getTargetTimestamp(duration));
+        } else if (args.length == 3 || args.length == 4) {
+            if (checkPermission(sender, "singleserver.timer")) return;
+
+            final String mode = args.length == 4 ? args[2] : null;
+            final String durationArg = args.length == 4 ? args[3] : args[2];
+            final Duration duration = plugin.getCommandManager().parseDurationAndCheckTask(sender, durationArg, false);
+            if (duration == null) {
+                sender.send(getHelpMessage());
+                return;
+            }
+
+            final Server server = plugin.getCommandManager().checkSingleTimerServerArg(sender, args[1]);
+            if (server == null) return;
+            if (plugin.isMaintenance(server)) {
+                sender.send(getMessage("singleServerAlreadyEnabled", "%SERVER%", server.getName()));
+                return;
+            }
+
+            final MaintenanceRunnableBase runnable = plugin.startSingleMaintenanceRunnable(server, duration, true, mode);
+            final Component message = getMessage(
+                    "singleStarttimerStarted",
+                    "%TIME%", runnable.getTime(),
+                    "%SERVER%", server.getName()
+            );
+            sender.send(message);
+            plugin.sendWebhookMessage("webhookSingleStarttimerStarted", DiscordWebhook.EventType.STARTTIMER_STARTED,
+                    "%TIME%", runnable.getTime(),
+                    "%SERVER%", server.getName(),
+                    "%TIMESTAMP%", plugin.getTargetTimestamp(duration));
+        } else {
+            sender.send(getHelpMessage());
+        }
+    }
+
+    @Override
+    public List<String> getTabCompletion(final SenderInfo sender, final String[] args) {
+        if (!sender.hasMaintenancePermission("singleserver.timer")) {
+            return Collections.emptyList();
+        }
+        if (args.length == 2) {
+            return plugin.getCommandManager().getServersCompletion(args[1].toLowerCase(Locale.ROOT));
+        }
+        if (args.length == 3 && plugin.getServer(args[1]) != null) {
+            final List<String> modes = new java.util.ArrayList<>(getSettings().getPingMessages().getKeys());
+            modes.remove("default");
+            return modes;
+        }
+        return Collections.emptyList();
+    }
+}
