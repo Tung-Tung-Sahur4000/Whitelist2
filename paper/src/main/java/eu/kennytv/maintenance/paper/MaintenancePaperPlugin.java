@@ -28,6 +28,7 @@ import eu.kennytv.maintenance.core.util.SenderInfo;
 import eu.kennytv.maintenance.core.util.ServerType;
 import eu.kennytv.maintenance.core.util.Task;
 import eu.kennytv.maintenance.paper.command.MaintenancePaperCommand;
+import eu.kennytv.maintenance.paper.hook.FastLoginHook;
 import eu.kennytv.maintenance.paper.listener.PaperServerListPingListener;
 import eu.kennytv.maintenance.paper.listener.PlayerLoginListener;
 import eu.kennytv.maintenance.paper.util.PaperOfflinePlayerInfo;
@@ -97,6 +98,17 @@ public final class MaintenancePaperPlugin extends MaintenancePlugin {
                 serverListPlusHook.setEnabled(!settings.isMaintenance());
             }
             plugin.getLogger().info("Enabled ServerListPlus integration");
+        }
+
+        // FastLogin knows which account type a name logs in as (premium vs cracked). When present, use it so
+        // /whitelist add only whitelists that variant instead of both the Mojang and offline UUID.
+        final Plugin fastLogin = pm.getPlugin("FastLogin");
+        if (pm.isPluginEnabled(fastLogin)) {
+            final FastLoginHook hook = FastLoginHook.tryHook(fastLogin, getLogger());
+            if (hook != null) {
+                setPremiumResolver(hook);
+                plugin.getLogger().info("Hooked into FastLogin - /whitelist add will match a player's real premium/cracked account");
+            }
         }
 
         if (false && pm.isPluginEnabled("LuckPerms")) {

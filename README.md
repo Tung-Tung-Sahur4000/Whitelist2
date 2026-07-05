@@ -130,6 +130,8 @@ build, minus the parts that only make sense on a proxy:
   name after they connect once
 * ✅ **built-in Discord bot** – `/whitelist add|remove|list`, `/link`, `/unlink`, `/lookup`, role sync and
   code-based linking (`kick` mode)
+* ✅ **FastLogin integration** (optional) – on a mixed premium/cracked server, whitelist a player's *real*
+  account type instead of both UUID variants
 * ❌ **not** included (inherently proxy-wide): cross-proxy Redis sync, per-backend-server whitelisting, the
   fallback/waiting-server routing and the `limbo` linking mode
 
@@ -152,6 +154,21 @@ Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugi
 as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`) — so `/pwhitelist`
 manages the *plugin's* whitelist, while the bare `/whitelist` stays vanilla's own command. All permission
 nodes (`maintenance.admin`, `maintenance.bypass`, `maintenance.whitelisted`, ...) are unchanged.
+
+### Mixed premium/cracked servers (AuthMe + FastLogin)
+On an offline-mode server that also allows premium logins (e.g. **AuthMe** for registration + **FastLogin**
+for premium auto-login), the same username can join with two different UUIDs: its **Mojang** UUID when the
+player is premium, or an **offline** UUID derived from the name when they're cracked. So by default
+`/whitelist add <name>` whitelists **both** variants — whichever way the player logs in, they match, and once
+they've joined once the username cache pins their real UUID. (AuthMe itself only tracks registration/login
+sessions, so it isn't consulted for UUID resolution — FastLogin is the one that knows premium vs cracked.)
+
+If **FastLogin** is installed, the plugin hooks it automatically (soft dependency, no config needed) and asks
+it which account type a name actually logs in as. When FastLogin knows (the name has joined before, or staff
+ran FastLogin's `/premium` / `/cracked` command), the plugin whitelists **only that variant** — so adding your
+cracked regular no longer also whitelists the stranger who owns that name on Mojang, and vice-versa. When
+FastLogin has no record for the name, or isn't installed, the plugin falls back to whitelisting both variants;
+the hook only ever *narrows* the result and can never block a whitelist add.
 
 ## Compiling
 Clone the project and build with Gradle (`./gradlew build`). You need a JDK 21+.

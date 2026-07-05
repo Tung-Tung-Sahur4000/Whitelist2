@@ -30,6 +30,7 @@ import eu.kennytv.maintenance.core.command.MaintenanceCommand;
 import eu.kennytv.maintenance.core.discord.DiscordBot;
 import eu.kennytv.maintenance.core.dump.MaintenanceDump;
 import eu.kennytv.maintenance.core.dump.PluginDump;
+import eu.kennytv.maintenance.core.hook.PremiumResolver;
 import eu.kennytv.maintenance.core.hook.ServerListPlusHook;
 import eu.kennytv.maintenance.core.runnable.MaintenanceRunnable;
 import eu.kennytv.maintenance.core.runnable.MaintenanceScheduleRunnable;
@@ -85,6 +86,8 @@ public abstract class MaintenancePlugin implements Maintenance {
     protected final Version version;
     protected Settings settings;
     protected ServerListPlusHook serverListPlusHook;
+    @Nullable
+    protected PremiumResolver premiumResolver;
     protected MaintenanceRunnable runnable;
     protected MaintenanceCommand commandManager;
     protected DiscordBot discordBot;
@@ -544,12 +547,63 @@ public abstract class MaintenancePlugin implements Maintenance {
                     if (!isOnlineMode()) {
                         addProfile(profiles, seen, new ProfileLookup(offlineUUID(name), name));
                     }
+
+                    // If a premium/cracked authenticator (e.g. FastLogin) knows which account this name
+                    // actually logs in as, drop the other variant so we don't also whitelist, say, the
+                    // premium account of a name whose owner here is a cracked player.
+                    return narrowToKnownAccountType(name, profiles);
                 }
             } catch (final IOException e) {
                 getLogger().log(Level.WARNING, "Could not fully resolve profiles for " + name, e);
             }
             return profiles;
         });
+    }
+
+    /**
+     * If {@link #premiumResolver} reports a definite account type for the name, keeps only the matching
+     * profile (premium Mojang UUID or offline UUID). Falls back to the full, unfiltered list whenever the
+     * type is unknown or filtering would leave nothing to whitelist, so the hook can never make a name
+     * un-whitelistable.
+     */
+    private List<SenderInfo> narrowToKnownAccountType(final String name, final List<SenderInfo> profiles) {
+        final PremiumResolver.AccountType type = accountType(name);
+        if (type == PremiumResolver.AccountType.UNKNOWN || profiles.size() < 2) {
+            return profiles;
+        }
+
+        final UUID offline = offlineUUID(name);
+        final List<SenderInfo> narrowed = new ArrayList<>();
+        for (final SenderInfo profile : profiles) {
+            final boolean isOffline = profile.uuid().equals(offline);
+            final boolean keep = type == PremiumResolver.AccountType.CRACKED ? isOffline : !isOffline;
+            if (keep) {
+                narrowed.add(profile);
+            }
+        }
+        return narrowed.isEmpty() ? profiles : narrowed;
+    }
+
+    /**
+     * Fail-safe account-type lookup: {@link PremiumResolver.AccountType#UNKNOWN} when no resolver is
+     * registered or it throws, so a misbehaving hook never blocks whitelisting.
+     */
+    private PremiumResolver.AccountType accountType(final String name) {
+        final PremiumResolver resolver = premiumResolver;
+        if (resolver == null) {
+            return PremiumResolver.AccountType.UNKNOWN;
+        }
+        try {
+            final PremiumResolver.AccountType type = resolver.accountType(name);
+            return type != null ? type : PremiumResolver.AccountType.UNKNOWN;
+        } catch (final Exception e) {
+            getLogger().log(Level.WARNING, "Premium resolver hook failed for " + name, e);
+            return PremiumResolver.AccountType.UNKNOWN;
+        }
+    }
+
+    public void setPremiumResolver(@Nullable final PremiumResolver premiumResolver) {
+        this.premiumResolver = premiumResolver;
     }
 
     private static void addProfile(final List<SenderInfo> profiles, final Set<UUID> seen, final ProfileLookup profile) {
