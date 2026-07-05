@@ -133,25 +133,24 @@ build, minus the parts that only make sense on a proxy:
 * ❌ **not** included (inherently proxy-wide): cross-proxy Redis sync, per-backend-server whitelisting, the
   fallback/waiting-server routing and the `limbo` linking mode
 
-Unlike the proxy build, the Paper build does **not** keep its own whitelist file. A single Minecraft server
-already has a whitelist, so entries are written straight to the server's native **`whitelist.json`** (via the
-Bukkit whitelist API) — the Discord bot and Bedrock resolution just decide *who* gets added. This means the
-plugin's whitelist and the vanilla `/whitelist` command share one list. The only files the plugin keeps of
-its own are the Discord links (`DiscordLinks.yml`) and the username cache (`usernamecache.yml`) — the cache
-is still needed because `whitelist.json` / `usercache.json` don't record whether a name is a premium, cracked
-or Floodgate (Bedrock) account, which is exactly what the resolver needs to store the correct UUID.
+Like the proxy builds, the Paper build keeps its **own** whitelist in **`WhitelistedPlayers.yml`** inside the
+plugin's data folder — it does **not** touch the server's native `whitelist.json` or the vanilla `/whitelist`
+command. The Discord bot, Bedrock/Geyser resolution and the username cache just decide *who* gets added and
+resolve the correct premium / cracked / Floodgate (Bedrock) UUID before it is written to the plugin's own
+file. The other files the plugin keeps of its own are the Discord links (`DiscordLinks.yml`) and the username
+cache (`usernamecache.yml`); the cache is what records whether a name maps to a premium, cracked or Floodgate
+account so the resolver stores the correct UUID.
 
-**Enforcement stays with the plugin** (it only *stores* in `whitelist.json`), which is what keeps the Discord
-code-linking flow working: at join the plugin replaces vanilla's "not whitelisted" kick with the one-time
-linking code. So leave vanilla enforcement **off** — set `white-list=false` in `server.properties` — and
-toggle the whitelist with `/pwhitelist on` (**not** `/whitelist on`: on a Paper server the bare `/whitelist`
-is vanilla's own command, so `/whitelist on` would turn *vanilla* enforcement on instead of the plugin's).
-(If you leave vanilla's `white-list` on, the plugin still overrides the kick screen to show the code, but
-turning the plugin's own whitelist off while vanilla's is on would let vanilla kick players before they ever
-see a code.)
+**Enforcement stays with the plugin**: while the whitelist is on, only players in `WhitelistedPlayers.yml`
+(or with `maintenance.bypass` / `maintenance.whitelisted`) may join. This is what keeps the Discord
+code-linking flow working — at join the plugin shows a non-whitelisted player their one-time link code
+instead of a plain kick. Because the plugin no longer shares a list with vanilla, leave vanilla's own
+whitelist **off** (set `white-list=false` in `server.properties`) so the two don't fight over the kick
+screen, and toggle the plugin's whitelist with `/pwhitelist on`.
 
 Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
-as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission
+as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`) — so `/pwhitelist`
+manages the *plugin's* whitelist, while the bare `/whitelist` stays vanilla's own command. All permission
 nodes (`maintenance.admin`, `maintenance.bypass`, `maintenance.whitelisted`, ...) are unchanged.
 
 ## Compiling

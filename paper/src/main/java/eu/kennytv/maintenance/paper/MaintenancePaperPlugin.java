@@ -18,6 +18,7 @@
 package eu.kennytv.maintenance.paper;
 
 import eu.kennytv.maintenance.core.MaintenancePlugin;
+import eu.kennytv.maintenance.core.Settings;
 import eu.kennytv.maintenance.core.dump.PluginDump;
 import eu.kennytv.maintenance.core.hook.LuckPermsHook;
 import eu.kennytv.maintenance.core.hook.ServerListPlusHook;
@@ -65,12 +66,12 @@ public final class MaintenancePaperPlugin extends MaintenancePlugin {
 
         // Strip only the config sections that are inherently proxy-wide (a single Paper server has no proxied
         // servers, cross-proxy Redis sync, fallback/waiting-server routing or per-server command hooks). Bedrock,
-        // the username cache and the built-in Discord bot all work on a single server and stay in the config.
-        // SettingsPaper stores the whitelist itself in the server's native whitelist.json.
-        settings = new SettingsPaper(this,
+        // the username cache, fallback-to-offline UUIDs and the built-in Discord bot all work on a single server
+        // and stay in the config. The whitelist is kept in the plugin's own WhitelistedPlayers.yml (the core
+        // default), independent of the server's native whitelist.json / vanilla /whitelist command.
+        settings = new Settings(this,
                 "redis", "proxied-maintenance-servers", "fallback", "waiting-server",
-                "commands-on-single-maintenance-enable", "commands-on-single-maintenance-disable",
-                "fallback-to-offline-uuid");
+                "commands-on-single-maintenance-enable", "commands-on-single-maintenance-disable");
 
         sendEnableMessage();
 
