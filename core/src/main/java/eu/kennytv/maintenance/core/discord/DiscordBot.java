@@ -206,7 +206,8 @@ public final class DiscordBot extends ListenerAdapter {
                 );
 
         final String guildId = settings.getDiscordGuildId();
-        if (guildId != null && !guildId.isEmpty()) {
+        final boolean guildIdConfigured = guildId != null && !guildId.isEmpty();
+        if (guildIdConfigured) {
             final Guild guild = jda.getGuildById(guildId);
             if (guild != null) {
                 guild.updateCommands().addCommands(whitelistCommand, unlinkCommand, lookupCommand).queue();
@@ -214,20 +215,32 @@ public final class DiscordBot extends ListenerAdapter {
                 reconcileRoleMembers(guild);
                 return;
             }
-            plugin.getLogger().warning("Configured Discord guild-id '" + guildId + "' could not be found; registering commands globally instead.");
         }
 
         jda.updateCommands().addCommands(whitelistCommand, unlinkCommand, lookupCommand).queue();
         plugin.getLogger().info("Registered global Discord slash commands (may take up to an hour to appear).");
 
-        // With no guild-id set, guild membership cannot be reliably resolved when the bot is in more than
-        // one server (resolveGuild() returns null), so the code-link flow falls back to "an admin still
-        // needs to give you the role" instead of verifying membership/role at link time. Strongly recommend
-        // setting guild-id when linking or role sync is in use.
-        if ((settings.isLinkingEnforced() || roleSyncEnabled()) && jda.getGuilds().size() != 1) {
+        // Emit EXACTLY ONE diagnostic below, so the log never contradicts itself (previously a set-but-unknown
+        // guild-id logged both "could not be found" AND "no guild-id is set").
+        if (guildIdConfigured) {
+            // A guild-id WAS set, but the bot is not a member of that guild - the id is wrong, or the bot was
+            // never invited to that specific server. Say that precisely (not "no guild-id is set") and print the
+            // servers the bot actually IS in, so the owner can copy the correct id instead of guessing.
+            plugin.getLogger().warning("Configured Discord guild-id '" + guildId + "' was not found among the "
+                    + jda.getGuilds().size() + " server(s) this bot is in, so commands were registered globally "
+                    + "(up to ~1h to appear) and membership can't be verified. Check that the bot was invited to "
+                    + "that server and that 'guild-id' is the SERVER (guild) id - not a channel, role, user or "
+                    + "application id. In Discord: enable Developer Mode, right-click the server icon, 'Copy Server ID'.");
+            logCurrentGuilds();
+        } else if ((settings.isLinkingEnforced() || roleSyncEnabled()) && jda.getGuilds().size() != 1) {
+            // With no guild-id set, guild membership cannot be reliably resolved when the bot is in more than
+            // one server (resolveGuild() returns null), so the code-link flow falls back to "an admin still
+            // needs to give you the role" instead of verifying membership/role at link time. Strongly recommend
+            // setting guild-id when linking or role sync is in use.
             plugin.getLogger().warning("No 'guild-id' is set in config.yml and the bot is in "
                     + jda.getGuilds().size() + " servers. Set 'discord-bot.guild-id' to your server's ID so "
                     + "linking and role sync can verify membership reliably and slash commands appear instantly.");
+            logCurrentGuilds();
         }
 
         if (roleSyncEnabled()) {
@@ -567,6 +580,24 @@ public final class DiscordBot extends ListenerAdapter {
         final ProfileLookup link = linkManager.getLink(event.getUser().getId());
         if (link != null && settings.removeWhitelistedPlayer(link.uuid())) {
             plugin.getLogger().info("Removed " + link.name() + " from the whitelist after they left the Discord server.");
+        }
+    }
+
+    /**
+     * Logs the servers the bot is currently a member of (name -> id). Printed when the configured
+     * {@code guild-id} is missing/unknown or unset, so the owner can copy the correct id from the log
+     * instead of guessing why linking, role sync or instant slash commands are not working.
+     */
+    private void logCurrentGuilds() {
+        final List<Guild> guilds = jda.getGuilds();
+        if (guilds.isEmpty()) {
+            plugin.getLogger().warning("The bot is not a member of any Discord server yet. Invite it with BOTH the "
+                    + "'bot' and 'applications.commands' scopes, then restart the server.");
+            return;
+        }
+        plugin.getLogger().warning("This bot is currently in the following server(s) - use the id of the one you want as 'guild-id':");
+        for (final Guild guild : guilds) {
+            plugin.getLogger().warning("  - " + guild.getName() + "  ->  guild-id: " + guild.getId());
         }
     }
 
