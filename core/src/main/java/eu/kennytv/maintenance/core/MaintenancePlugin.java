@@ -749,6 +749,13 @@ public abstract class MaintenancePlugin implements Maintenance {
      * Starts the built-in Discord bot if it is enabled and a token is configured.
      * The login happens off the main thread.
      */
+    public void restartDiscordBot() {
+        if (discordBot != null) {
+            discordBot.shutdown();
+        }
+        startDiscordBot();
+    }
+
     public void startDiscordBot() {
         if (!settings.isDiscordBotEnabled()) {
             if (settings.isLinkingEnforced()) {

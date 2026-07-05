@@ -31,6 +31,7 @@ public final class ReloadCommand extends CommandInfo {
     public void execute(final SenderInfo sender, final String[] args) {
         if (checkArgs(sender, args, 1)) return;
         getSettings().reloadConfigs();
+        plugin.restartDiscordBot();
         sender.send(getMessage("reload"));
     }
 }

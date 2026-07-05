@@ -36,7 +36,14 @@ import org.jetbrains.annotations.Nullable;
  * resolution untouched - the hook can never block or break a whitelist add.
  */
 public final class FastLoginHook implements PremiumResolver {
-    private static final String STORED_PROFILE_CLASS = "com.github.games647.fastlogin.core.StoredProfile";
+    /**
+     * FastLogin moved/renamed {@code StoredProfile} across versions. Try the known paths in order.
+     */
+    private static final String[] STORED_PROFILE_CLASSES = {
+            "com.github.games647.fastlogin.core.StoredProfile",
+            "com.github.games647.fastlogin.core.shared.StoredProfile",
+            "com.github.games647.fastlogin.core.common.StoredProfile",
+    };
 
     private final Object fastLogin;
     private final Method getCore;
@@ -75,7 +82,24 @@ public final class FastLoginHook implements PremiumResolver {
             }
             final Method loadProfile = storage.getClass().getMethod("loadProfile", String.class);
 
-            final Class<?> storedProfile = Class.forName(STORED_PROFILE_CLASS, false, fastLogin.getClass().getClassLoader());
+            final ClassLoader classLoader = fastLogin.getClass().getClassLoader();
+            Class<?> storedProfile = null;
+            for (final String className : STORED_PROFILE_CLASSES) {
+                try {
+                    storedProfile = Class.forName(className, false, classLoader);
+                    break;
+                } catch (final ClassNotFoundException ignored) {
+                    // Try next path
+                }
+            }
+            if (storedProfile == null) {
+                logger.warning("FastLogin is installed but its StoredProfile class could not be found in any "
+                        + "known package. FastLogin integration is disabled; whitelisting will match both "
+                        + "the premium and cracked account variants. Known paths tried: "
+                        + java.util.Arrays.toString(STORED_PROFILE_CLASSES));
+                return null;
+            }
+
             final Method isPremium = storedProfile.getMethod("isPremium");
             Method isSaved;
             try {
