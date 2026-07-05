@@ -141,6 +141,13 @@ its own are the Discord links (`DiscordLinks.yml`) and the username cache (`user
 is still needed because `whitelist.json` / `usercache.json` don't record whether a name is a premium, cracked
 or Floodgate (Bedrock) account, which is exactly what the resolver needs to store the correct UUID.
 
+**Enforcement stays with the plugin** (it only *stores* in `whitelist.json`), which is what keeps the Discord
+code-linking flow working: at join the plugin replaces vanilla's "not whitelisted" kick with the one-time
+linking code. So leave vanilla enforcement **off** — set `white-list=false` in `server.properties` — and
+toggle the whitelist with `/whitelist on`. (If you leave vanilla's `white-list` on, the plugin still overrides
+the kick screen to show the code, but turning the plugin's own whitelist off while vanilla's is on would let
+vanilla kick players before they ever see a code.)
+
 Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
 as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission
 nodes (`maintenance.admin`, `maintenance.bypass`, `maintenance.whitelisted`, ...) are unchanged.
