@@ -133,6 +133,14 @@ build, minus the parts that only make sense on a proxy:
 * ❌ **not** included (inherently proxy-wide): cross-proxy Redis sync, per-backend-server whitelisting, the
   fallback/waiting-server routing and the `limbo` linking mode
 
+Unlike the proxy build, the Paper build does **not** keep its own whitelist file. A single Minecraft server
+already has a whitelist, so entries are written straight to the server's native **`whitelist.json`** (via the
+Bukkit whitelist API) — the Discord bot and Bedrock resolution just decide *who* gets added. This means the
+plugin's whitelist and the vanilla `/whitelist` command share one list. The only files the plugin keeps of
+its own are the Discord links (`DiscordLinks.yml`) and the username cache (`usernamecache.yml`) — the cache
+is still needed because `whitelist.json` / `usercache.json` don't record whether a name is a premium, cracked
+or Floodgate (Bedrock) account, which is exactly what the resolver needs to store the correct UUID.
+
 Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
 as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission
 nodes (`maintenance.admin`, `maintenance.bypass`, `maintenance.whitelisted`, ...) are unchanged.

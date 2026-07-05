@@ -119,9 +119,20 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
         }
 
         createFile("config.yml");
-        createFile("WhitelistedPlayers.yml");
+        if (useInternalWhitelist()) {
+            createFile("WhitelistedPlayers.yml");
+        }
 
         reloadConfigs();
+    }
+
+    /**
+     * Whether whitelisted players are stored in the plugin's own {@code WhitelistedPlayers.yml}. Proxies have
+     * no built-in whitelist, so they use this. The Paper platform overrides this to store entries in the
+     * server's native whitelist ({@code whitelist.json}) instead, keeping only linking info of its own.
+     */
+    protected boolean useInternalWhitelist() {
+        return true;
     }
 
     @Override
@@ -130,8 +141,10 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
             config = new Config(new File(plugin.getDataFolder(), "config.yml"), unsupportedFields);
             config.load();
             config.resetAwesomeHeader();
-            whitelist = new Config(new File(plugin.getDataFolder(), "WhitelistedPlayers.yml"));
-            whitelist.load();
+            if (useInternalWhitelist()) {
+                whitelist = new Config(new File(plugin.getDataFolder(), "WhitelistedPlayers.yml"));
+                whitelist.load();
+            }
         } catch (final Exception e) {
             throw new RuntimeException("Unable to load Maintenance files - probably a malformed config file", e);
         }
