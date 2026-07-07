@@ -36,7 +36,7 @@ import org.jetbrains.annotations.Nullable;
  * resolution untouched - the hook can never block or break a whitelist add.
  */
 public final class FastLoginHook implements PremiumResolver {
-    private static final String STORED_PROFILE_CLASS = "com.github.games647.fastlogin.core.StoredProfile";
+    private static final String STORED_PROFILE_CLASS = "com.github.games647.fastlogin.core.storage.StoredProfile";
 
     private final Object fastLogin;
     private final Method getCore;
@@ -85,8 +85,13 @@ public final class FastLoginHook implements PremiumResolver {
             }
             return new FastLoginHook(fastLogin, getCore, getStorage, loadProfile, isPremium, isSaved);
         } catch (final ReflectiveOperationException e) {
-            logger.log(Level.WARNING, "FastLogin is installed but its API could not be hooked (unsupported "
-                    + "version?); whitelisting will keep matching both the premium and cracked account", e);
+            // A single-line warning is enough - the fallback (whitelist both variants) is safe and this is
+            // expected on unsupported FastLogin versions. Full stack trace only at FINE level so it stays
+            // available for debugging without scaring server owners into thinking whitelisting is broken.
+            logger.warning("FastLogin is installed but its API could not be hooked ("
+                    + e.getClass().getSimpleName() + ": " + e.getMessage()
+                    + "); whitelisting still works and will keep matching both the premium and cracked account.");
+            logger.log(Level.FINE, "FastLogin hook stack trace", e);
             return null;
         }
     }
