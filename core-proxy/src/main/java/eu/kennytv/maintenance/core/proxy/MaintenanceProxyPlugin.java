@@ -89,6 +89,19 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     }
 
     /**
+     * On {@code /… reload}, restart the Discord bot so a changed token, guild-id, role-id, linking mode or
+     * intent requirement takes effect (and role members are reconciled again) without a full server restart.
+     */
+    @Override
+    public void onConfigReload() {
+        if (discordBot != null) {
+            discordBot.shutdown();
+            discordBot = null;
+        }
+        startDiscordBot();
+    }
+
+    /**
      * Starts the built-in Discord bot if it is enabled and a token is configured.
      * The login happens off the main thread.
      */
@@ -472,6 +485,17 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
     @Nullable
     public String getCachedName(final UUID uuid) {
         return playerNameCache != null ? playerNameCache.getName(uuid) : null;
+    }
+
+    /**
+     * Brings a joining player's whitelist state in line with their current Discord role via a live check,
+     * so role sync does not rely on gateway role events firing. No-op for unlinked players or when the
+     * Discord bot is disabled. Called on every initial proxy join.
+     */
+    public void syncWhitelistWithRole(final SenderInfo sender) {
+        if (discordBot != null) {
+            discordBot.syncWhitelistWithRole(sender.uuid(), sender.name());
+        }
     }
 
     /**

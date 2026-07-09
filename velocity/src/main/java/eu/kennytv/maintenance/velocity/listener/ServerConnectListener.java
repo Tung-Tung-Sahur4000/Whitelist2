@@ -50,6 +50,8 @@ public final class ServerConnectListener extends ProxyJoinListenerBase {
         final VelocitySenderInfo sender = new VelocitySenderInfo(event.getPlayer());
         // Remember every player that connects (incl. cracked/Bedrock) so they can be whitelisted by name later.
         plugin.cachePlayer(event.getPlayer().getUniqueId(), event.getPlayer().getUsername());
+        // Live two-way role sync, so role gains/losses take effect even if the gateway event never fired.
+        plugin.syncWhitelistWithRole(sender);
         if (shouldKick(sender, false)) {
             final Server waitingServer = shouldConnectToWaitingServer(sender);
             // Do the actual connecting in the ServerPreConnectEvent handler if a waiting server exists

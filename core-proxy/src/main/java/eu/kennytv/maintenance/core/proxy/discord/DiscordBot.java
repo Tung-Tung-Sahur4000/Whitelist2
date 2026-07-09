@@ -576,8 +576,16 @@ public final class DiscordBot extends ListenerAdapter {
         }
         final Role role = guild.getRoleById(settings.getDiscordAutoWhitelistRoleId());
         if (role == null) {
+            // The configured role id does not exist in this guild - the single most common reason role sync
+            // "does nothing". Without this warning it failed completely silently. Surface it loudly.
+            plugin.getLogger().warning("auto-whitelist-role-id '" + settings.getDiscordAutoWhitelistRoleId()
+                    + "' was not found in Discord server '" + guild.getName() + "'. Role sync cannot whitelist "
+                    + "anyone until this is a valid role id FROM THAT SERVER. (Discord: Settings -> Advanced -> "
+                    + "Developer Mode on, then right-click the role -> Copy Role ID.)");
             return;
         }
+        plugin.getLogger().info("Role sync active: whitelisting members with the '" + role.getName()
+                + "' role (" + role.getId() + ") in '" + guild.getName() + "'.");
 
         guild.loadMembers().onSuccess(members -> {
             for (final Member member : members) {
@@ -596,6 +604,60 @@ public final class DiscordBot extends ListenerAdapter {
         }).onError(error ->
                 plugin.getLogger().warning("Could not load members of " + guild.getName()
                         + " for role sync. Make sure the 'Server Members Intent' is enabled for the bot."));
+    }
+
+    /**
+     * Live, two-way role check (DiscordSRV-style): fetch the linked player's CURRENT Discord roles directly
+     * and bring the whitelist in line with them — add if they hold the role, remove if they don't (and
+     * {@code remove-on-role-loss} is enabled). Run on join so role-based whitelisting does not depend on the
+     * gateway {@link GuildMemberRoleAddEvent}/{@link GuildMemberRoleRemoveEvent} firing at all: a missed
+     * event (bot was down, Server Members Intent off, never delivered) is reconciled the next time the player
+     * connects. Unlinked players cost nothing (a map lookup, no REST call).
+     */
+    public void syncWhitelistWithRole(final UUID uuid, final String name) {
+        if (jda == null || !roleSyncEnabled()) {
+            return;
+        }
+        // The link may be stored under the player's other UUID variant (premium vs cracked), so fall back
+        // to a name lookup as well.
+        String discordId = linkManager.getDiscordId(uuid);
+        if (discordId == null) {
+            discordId = linkManager.getDiscordIdByName(name);
+        }
+        if (discordId == null) {
+            return; // not linked - the normal code flow handles them
+        }
+
+        final Guild guild = resolveGuild();
+        if (guild == null) {
+            plugin.getLogger().warning("Cannot run live role check for " + name
+                    + ": no guild could be resolved. Set 'discord-bot.guild-id' in config.yml.");
+            return;
+        }
+
+        guild.retrieveMemberById(discordId).queue(member -> {
+            if (hasAutoRole(member)) {
+                if (settings.addWhitelistedPlayer(uuid, name)) {
+                    plugin.getLogger().info("Live role check whitelisted " + name
+                            + " (holds the whitelist role) - reconnect to join.");
+                }
+            } else if (settings.isDiscordRemoveOnRoleLoss()) {
+                if (settings.removeWhitelistedPlayer(uuid)) {
+                    plugin.getLogger().info("Live role check removed " + name
+                            + " from the whitelist (no longer has the whitelist role).");
+                }
+            }
+        }, error -> {
+            // The member could not be fetched. Only treat a confirmed "not in the server" as a reason to
+            // revoke access; transient API errors must not cause false removals.
+            if (error instanceof ErrorResponseException err
+                    && err.getErrorResponse() == ErrorResponse.UNKNOWN_MEMBER
+                    && settings.isDiscordRemoveOnRoleLoss()
+                    && settings.removeWhitelistedPlayer(uuid)) {
+                plugin.getLogger().info("Live role check removed " + name
+                        + " from the whitelist (no longer in the Discord server).");
+            }
+        });
     }
 
     // --- Code-based linking (DM the bot a code) ---
@@ -747,7 +809,20 @@ public final class DiscordBot extends ListenerAdapter {
             return jda.getGuildById(guildId);
         }
         final List<Guild> guilds = jda.getGuilds();
-        return guilds.size() == 1 ? guilds.get(0) : null;
+        if (guilds.size() == 1) {
+            return guilds.get(0);
+        }
+        // No guild-id set and the bot is in several servers: fall back to the one that actually contains
+        // the configured auto-whitelist role, so role sync still works without an explicit guild-id.
+        if (roleSyncEnabled()) {
+            final String roleId = settings.getDiscordAutoWhitelistRoleId();
+            for (final Guild guild : guilds) {
+                if (guild.getRoleById(roleId) != null) {
+                    return guild;
+                }
+            }
+        }
+        return null;
     }
 
     private String sanitizeName(final String name) {
