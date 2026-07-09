@@ -144,9 +144,11 @@ or Floodgate (Bedrock) account, which is exactly what the resolver needs to stor
 **Enforcement stays with the plugin** (it only *stores* in `whitelist.json`), which is what keeps the Discord
 code-linking flow working: at join the plugin replaces vanilla's "not whitelisted" kick with the one-time
 linking code. So leave vanilla enforcement **off** — set `white-list=false` in `server.properties` — and
-toggle the whitelist with `/whitelist on`. (If you leave vanilla's `white-list` on, the plugin still overrides
-the kick screen to show the code, but turning the plugin's own whitelist off while vanilla's is on would let
-vanilla kick players before they ever see a code.)
+toggle the whitelist with `/pwhitelist on` (**not** `/whitelist on`: on a Paper server the bare `/whitelist`
+is vanilla's own command, so `/whitelist on` would turn *vanilla* enforcement on instead of the plugin's).
+(If you leave vanilla's `white-list` on, the plugin still overrides the kick screen to show the code, but
+turning the plugin's own whitelist off while vanilla's is on would let vanilla kick players before they ever
+see a code.)
 
 Because vanilla Minecraft already owns `/whitelist` on a Paper server, the plugin's command is registered
 as `/pwhitelist` (aliases `/pwl`, `/maintenance`, `/mt`, and `/proxywhitelist:whitelist`). All permission
