@@ -236,6 +236,16 @@ discord-bot:
     mode: "off"
     # If true, a linked player must also have the auto-whitelist-role to actually be whitelisted.
     require-role: true
+    # Live role check (recommended). When an ALREADY-LINKED player joins but is not whitelisted yet,
+    # the plugin asks Discord for that member's current roles right then (a direct REST lookup) and, if
+    # they now hold the auto-whitelist-role, adds them to the whitelist immediately - so their next join
+    # goes straight through instead of waiting for the (sometimes delayed or missed) role-update event.
+    # Unlike the background role sync, this on-demand lookup does NOT require the 'Server Members Intent',
+    # so it also covers roles that were granted while the bot was offline.
+    live-role-check: true
+    # Minimum seconds between two live role checks for the SAME linked Discord account. Prevents a rejoin
+    # flood from hammering the Discord API; the player just rejoins once the cooldown passes.
+    live-role-check-cooldown-seconds: 30
     # Number of digits in the linking code.
     # 6 is the minimum recommended for online-mode servers.
     # 8+ is strongly recommended for cracked/offline-mode servers (reduces code-theft race window).

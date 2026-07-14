@@ -229,6 +229,9 @@ public abstract class MaintenanceProxyPlugin extends MaintenancePlugin implement
         if (settingsProxy.isLinkingLimboMode() && discordBot != null) {
             // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
+                // Live role check: pull their current Discord roles now so a role they already hold gets them
+                // whitelisted right away, letting them in on the next join without waiting for a gateway event.
+                discordBot.checkRoleLive(sender.uuid(), sender.name());
                 return settingsProxy.getMessage("linkingPendingApproval");
             }
             // null means the active-code pool is at capacity — bot flood in progress.

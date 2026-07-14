@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
@@ -81,6 +82,11 @@ public final class DiscordBot extends ListenerAdapter {
     private final Settings settings;
     private final DiscordLinkManager linkManager;
     private final LinkCodeManager linkCodeManager;
+    /**
+     * Per-Discord-account timestamp (ms) of the last live role check, used to rate-limit on-demand
+     * role lookups so a rejoin flood cannot hammer the Discord REST API.
+     */
+    private final Map<String, Long> lastLiveRoleCheck = new ConcurrentHashMap<>();
     private JDA jda;
 
     public DiscordBot(final MaintenancePlugin plugin, final Settings settings) {
@@ -121,6 +127,80 @@ public final class DiscordBot extends ListenerAdapter {
      */
     public boolean isLinkedByName(final String name) {
         return linkManager.isLinkedByName(name);
+    }
+
+    /**
+     * Live, on-demand role check for an already-linked player who joined but is not whitelisted yet.
+     *
+     * <p>Instead of waiting for Discord to push a {@code GuildMemberRoleAdd} gateway event (which requires
+     * the privileged Server Members Intent and can be delayed or missed entirely if the role was granted
+     * while the bot was offline), this fetches the member's <b>current</b> roles directly via a REST lookup
+     * and, if they now satisfy the whitelist requirement, adds them to the whitelist immediately. The player
+     * is then let in on their <b>next</b> join — no manual reconcile, no waiting for the background sync.
+     *
+     * <p>The lookup runs fully asynchronously on JDA's callback thread, so it never blocks the join. Calls
+     * are rate-limited per Discord account (see {@code live-role-check-cooldown-seconds}) so a rejoin flood
+     * cannot spam the Discord API.
+     *
+     * @param uuid the joining player's UUID
+     * @param name the joining player's name (used as a cracked/offline UUID-drift fallback)
+     */
+    public void checkRoleLive(final UUID uuid, final String name) {
+        if (jda == null || !settings.isLinkingLiveRoleCheck()) {
+            return;
+        }
+
+        // Resolve the linked Discord account (primary UUID index, then the name fallback for offline/cracked
+        // servers where the session UUID may have drifted since link time).
+        String discordId = linkManager.getDiscordId(uuid);
+        if (discordId == null) {
+            discordId = linkManager.getDiscordIdByName(name);
+        }
+        if (discordId == null) {
+            return; // not linked - nothing to check (the caller shows the link code instead)
+        }
+
+        final ProfileLookup link = linkManager.getLink(discordId);
+        if (link == null) {
+            return;
+        }
+
+        // Nothing a live check could change if the linked account is already whitelisted.
+        if (settings.isWhitelisted(link.uuid())) {
+            return;
+        }
+
+        // Per-account cooldown so repeated rejoins don't hammer the REST API.
+        final long now = System.currentTimeMillis();
+        final long cooldownMs = Math.max(0, settings.getLinkingLiveRoleCheckCooldownSeconds()) * 1000L;
+        final Long last = lastLiveRoleCheck.get(discordId);
+        if (last != null && now - last < cooldownMs) {
+            return;
+        }
+        lastLiveRoleCheck.put(discordId, now);
+
+        final Guild guild = resolveGuild();
+        if (guild == null) {
+            // Without a resolvable guild we cannot look up the member. Role add / reconcile paths carry their
+            // own guild context; nudge the owner to set guild-id so the live check can work.
+            return;
+        }
+
+        final String resolvedDiscordId = discordId;
+        guild.retrieveMemberById(resolvedDiscordId).queue(member -> {
+            // Mirror the whitelist decision used by the code-link flow: whitelist when no role is required,
+            // when role sync is off, or when the member currently holds the auto-whitelist role.
+            if (!settings.isLinkingRequireRole() || !roleSyncEnabled() || hasAutoRole(member)) {
+                if (settings.addWhitelistedPlayer(link.uuid(), link.name())) {
+                    plugin.getLogger().info("Live role check: whitelisted " + link.name()
+                            + " (they already hold the whitelist role) - they can join on their next attempt.");
+                }
+            }
+        }, error -> {
+            // UNKNOWN_MEMBER simply means they are not in the guild (yet); anything else is a transient API
+            // error. Either way there is nothing to do - allow a retry sooner by clearing the cooldown stamp.
+            lastLiveRoleCheck.remove(resolvedDiscordId);
+        });
     }
 
     /**

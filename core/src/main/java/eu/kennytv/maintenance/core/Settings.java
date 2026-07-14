@@ -103,6 +103,8 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
     private boolean discordAllowLinking;
     private String linkingMode;
     private boolean linkingRequireRole;
+    private boolean linkingLiveRoleCheck;
+    private int linkingLiveRoleCheckCooldownSeconds;
     private int linkCodeLength;
     private int linkCodeExpirySeconds;
     private int linkMaxAttemptsPerMinute;
@@ -329,12 +331,16 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
         if (linkingSection != null) {
             linkingMode = normalizeLinkingMode(linkingSection.getString("mode", "off"));
             linkingRequireRole = linkingSection.getBoolean("require-role", true);
+            linkingLiveRoleCheck = linkingSection.getBoolean("live-role-check", true);
+            linkingLiveRoleCheckCooldownSeconds = linkingSection.getInt("live-role-check-cooldown-seconds", 30);
             linkCodeLength = linkingSection.getInt("code-length", 6);
             linkCodeExpirySeconds = linkingSection.getInt("code-expiry-seconds", 600);
             linkMaxAttemptsPerMinute = linkingSection.getInt("max-attempts-per-minute", 5);
         } else {
             linkingMode = "off";
             linkingRequireRole = true;
+            linkingLiveRoleCheck = true;
+            linkingLiveRoleCheckCooldownSeconds = 30;
             linkCodeLength = 6;
             linkCodeExpirySeconds = 600;
             linkMaxAttemptsPerMinute = 5;
@@ -941,6 +947,23 @@ public class Settings implements eu.kennytv.maintenance.api.Settings {
 
     public boolean isLinkingRequireRole() {
         return linkingRequireRole;
+    }
+
+    /**
+     * @return {@code true} if a linked-but-not-yet-whitelisted player joining should trigger a live
+     *         (on-demand REST) role check against Discord, so they are whitelisted as soon as they hold
+     *         the role instead of waiting for the gateway role-update event
+     */
+    public boolean isLinkingLiveRoleCheck() {
+        return linkingLiveRoleCheck;
+    }
+
+    /**
+     * @return the minimum number of seconds between two live role checks for the same Discord account,
+     *         used to avoid hammering the Discord REST API on rejoin floods
+     */
+    public int getLinkingLiveRoleCheckCooldownSeconds() {
+        return linkingLiveRoleCheckCooldownSeconds;
     }
 
     public int getLinkCodeLength() {

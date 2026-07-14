@@ -57,6 +57,16 @@ gaining that role automatically adds them to the whitelist; losing it removes th
 holders are also reconciled on startup. Receiving role changes requires the **Server Members Intent** to be enabled
 for the bot in the Discord developer portal.
 
+#### Live role check (no waiting for Discord to update)
+`linking.live-role-check: true` (default) makes the whitelist feel instant for already-linked players. When a linked
+player joins but isn't whitelisted yet, instead of only showing "wait for the role", the plugin asks Discord for that
+member's **current** roles right then (a direct REST lookup) and, if they already hold the `auto-whitelist-role-id`,
+adds them to the whitelist immediately — so they get straight in on their **next** join. No manual reconcile, and no
+waiting for the (sometimes delayed or missed) role-add gateway event. Unlike the background role sync, this on-demand
+lookup does **not** require the Server Members Intent, so it also picks up roles granted while the bot was offline.
+Lookups are rate-limited per Discord account (`linking.live-role-check-cooldown-seconds`, default 30) so rejoin floods
+can't hammer the Discord API.
+
 ### Cracked / offline players (LimboAuth etc.)
 Cracked (offline-mode) accounts don't exist in Mojang's database, so they can't be looked up by name the
 normal way — and auth plugins like **LimboAuth** prefix cracked names with a `.`. To handle this, the plugin

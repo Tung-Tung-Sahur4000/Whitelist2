@@ -821,6 +821,10 @@ public abstract class MaintenancePlugin implements Maintenance {
         if (settings.isLinkingEnforced() && discordBot != null) {
             // Already linked (primary UUID check, or name-based fallback for cracked/offline servers).
             if (discordBot.isLinked(sender.uuid()) || discordBot.isLinkedByName(sender.name())) {
+                // Live role check: ask Discord for their current roles now, so if they already have the
+                // whitelist role they are added immediately and let in on their next join - no waiting for
+                // the (possibly delayed or missed) gateway role-update event.
+                discordBot.checkRoleLive(sender.uuid(), sender.name());
                 return settings.getMessage("linkingPendingApproval");
             }
             // null means the active-code pool is at capacity - bot flood in progress.
